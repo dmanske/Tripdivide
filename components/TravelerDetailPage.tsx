@@ -270,14 +270,35 @@ const TravelerDetailPage: React.FC<TravelerDetailPageProps> = ({ trip, travelerI
           </button>
 
           {/* Header principal */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <h1 className="text-3xl font-black text-white tracking-tight">{traveler.fullName}</h1>
-              <div className="flex items-center gap-2">
-                <Badge color="indigo" className="text-[10px] px-2 py-0.5">{traveler.type}</Badge>
-                {couple && <Badge color="gray" className="text-[10px] px-2 py-0.5">{couple.name}</Badge>}
-                {traveler.isPayer && <Badge color="green" className="text-[10px] px-2 py-0.5">PAGANTE</Badge>}
-                {traveler.canDrive && <Badge color="blue" className="text-[10px] px-2 py-0.5">DIRIGE</Badge>}
+          <div className="flex items-start justify-between gap-6">
+            <div className="flex-1">
+              <div className="flex items-center gap-4 mb-3">
+                <h1 className="text-3xl font-black text-white tracking-tight">{traveler.fullName}</h1>
+                <div className="flex items-center gap-2">
+                  <Badge color="indigo" className="text-[10px] px-2 py-0.5">{traveler.type}</Badge>
+                  {couple && <Badge color="gray" className="text-[10px] px-2 py-0.5">{couple.name}</Badge>}
+                  {traveler.isPayer && <Badge color="green" className="text-[10px] px-2 py-0.5">PAGANTE</Badge>}
+                  {traveler.canDrive && <Badge color="blue" className="text-[10px] px-2 py-0.5">DIRIGE</Badge>}
+                </div>
+              </div>
+              
+              {/* Contato inline */}
+              <div className="flex items-center gap-6 text-sm text-gray-400">
+                {traveler.phone && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-600">📞</span>
+                    <span>{formatPhone(traveler.phone)}</span>
+                  </div>
+                )}
+                {traveler.email && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-600">✉️</span>
+                    <span className="truncate max-w-xs">{traveler.email}</span>
+                  </div>
+                )}
+                {!traveler.phone && !traveler.email && (
+                  <span className="text-gray-600 italic text-xs">Sem informações de contato</span>
+                )}
               </div>
             </div>
 
@@ -302,7 +323,7 @@ const TravelerDetailPage: React.FC<TravelerDetailPageProps> = ({ trip, travelerI
                     </svg>
                   </button>
                 ) : (
-                  <div className="absolute right-0 top-full mt-2 bg-gray-900 border border-gray-800 rounded-xl shadow-xl p-3 w-64 z-10">
+                  <div className="absolute right-0 top-full mt-2 bg-gray-900 border border-gray-800 rounded-xl shadow-xl p-3 w-64 z-10 animate-in slide-in-from-top-2">
                     <p className="text-xs text-red-400 font-bold mb-3">⚠️ Confirmar exclusão?</p>
                     <div className="flex gap-2">
                       <Button variant="ghost" className="flex-1 bg-red-600/20 text-red-400 hover:bg-red-600/30 text-xs" onClick={handleDeleteTraveler}>
@@ -337,21 +358,6 @@ const TravelerDetailPage: React.FC<TravelerDetailPageProps> = ({ trip, travelerI
               </div>
             )}
 
-            {/* Contato */}
-            <div className="mb-5">
-              <p className="text-[10px] font-black text-gray-500 uppercase mb-3">Contato</p>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-600">📞</span>
-                  <p className="text-xs text-white">{formatPhone(traveler.phone || '') || '—'}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-600">✉️</span>
-                  <p className="text-xs text-white truncate">{traveler.email || '—'}</p>
-                </div>
-              </div>
-            </div>
-
             {/* Segmentos */}
             <div className="mb-5">
               <p className="text-[10px] font-black text-gray-500 uppercase mb-3">Segmentos</p>
@@ -372,7 +378,7 @@ const TravelerDetailPage: React.FC<TravelerDetailPageProps> = ({ trip, travelerI
             </div>
 
             {/* Participação */}
-            <div className="mb-5">
+            <div>
               <p className="text-[10px] font-black text-gray-500 uppercase mb-3">Participação</p>
               <div className="flex gap-2">
                 {traveler.isPayer && (
