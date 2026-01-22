@@ -104,7 +104,8 @@ serve(async (req) => {
     if (action === 'encrypt') {
       // Criptografar e salvar documento
       const { 
-        travelerId, docType, docCategory, docNumber, 
+        travelerId, travelerProfileId, isProfileDocument,
+        docType, docCategory, docNumber, 
         issuerCountry, issuerState, issuerAgency, issuerPlace,
         regionOrCountry, issueDate, expiryDate, visaCategory,
         entryType, stayDurationDays, licenseCategory, customLabel,
@@ -113,59 +114,137 @@ serve(async (req) => {
       
       const { encrypted, iv, last4 } = await encryptDocument(docNumber)
       
-      // Salvar via RPC
-      const { data, error } = await supabaseClient.rpc('save_encrypted_document', {
-        p_traveler_id: travelerId,
-        p_doc_type: docType,
-        p_doc_category: docCategory,
-        p_doc_number_enc: encrypted,
-        p_doc_number_iv: iv,
-        p_doc_number_last4: last4,
-        p_issuer_country: issuerCountry || null,
-        p_issuer_state: issuerState || null,
-        p_issuer_agency: issuerAgency || null,
-        p_issuer_place: issuerPlace || null,
-        p_region_or_country: regionOrCountry || null,
-        p_issue_date: issueDate || null,
-        p_expiry_date: expiryDate || null,
-        p_visa_category: visaCategory || null,
-        p_entry_type: entryType || null,
-        p_stay_duration_days: stayDurationDays || null,
-        p_license_category: licenseCategory || null,
-        p_custom_label: customLabel || null,
-        p_passport_document_id: passportDocumentId || null,
-        p_is_primary: isPrimary || false,
-        p_notes: notes || null,
-        p_document_id: documentId || null
-      })
-      
-      if (error) throw error
-      
-      return new Response(
-        JSON.stringify({ success: true, documentId: data }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      if (isProfileDocument) {
+        // Salvar documento de perfil global
+        const docData = {
+          traveler_profile_id: travelerProfileId,
+          doc_type: docType,
+          doc_category: docCategory,
+          doc_number_enc: encrypted,
+          doc_number_iv: iv,
+          doc_number_last4: last4,
+          issuing_country: issuerCountry || null,
+          issuer_state: issuerState || null,
+          issuer_agency: issuerAgency || null,
+          issuer_place: issuerPlace || null,
+          region_or_country: regionOrCountry || null,
+          issue_date: issueDate || null,
+          doc_expiry: expiryDate || null,  // CORRIGIDO: era expiry_date, agora é doc_expiry
+          visa_category: visaCategory || null,
+          entry_type: entryType || null,
+          stay_duration_days: stayDurationDays || null,
+          license_category: licenseCategory || null,
+          custom_label: customLabel || null,
+          passport_document_id: passportDocumentId || null,
+          is_primary: isPrimary || false,
+          notes: notes || null,
+          updated_at: new Date().toISOString()
+        }
+
+        if (documentId) {
+          // Update
+          const { data, error } = await supabaseClient
+            .from('td_traveler_profile_documents')
+            .update(docData)
+            .eq('id', documentId)
+            .select()
+            .single()
+          
+          if (error) throw error
+          
+          return new Response(
+            JSON.stringify({ success: true, documentId: data.id }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        } else {
+          // Insert
+          const { data, error } = await supabaseClient
+            .from('td_traveler_profile_documents')
+            .insert({ ...docData, created_at: new Date().toISOString() })
+            .select()
+            .single()
+          
+          if (error) throw error
+          
+          return new Response(
+            JSON.stringify({ success: true, documentId: data.id }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+      } else {
+        // Salvar documento legado via RPC
+        const { data, error } = await supabaseClient.rpc('save_encrypted_document', {
+          p_traveler_id: travelerId,
+          p_doc_type: docType,
+          p_doc_category: docCategory,
+          p_doc_number_enc: encrypted,
+          p_doc_number_iv: iv,
+          p_doc_number_last4: last4,
+          p_issuer_country: issuerCountry || null,
+          p_issuer_state: issuerState || null,
+          p_issuer_agency: issuerAgency || null,
+          p_issuer_place: issuerPlace || null,
+          p_region_or_country: regionOrCountry || null,
+          p_issue_date: issueDate || null,
+          p_expiry_date: expiryDate || null,
+          p_visa_category: visaCategory || null,
+          p_entry_type: entryType || null,
+          p_stay_duration_days: stayDurationDays || null,
+          p_license_category: licenseCategory || null,
+          p_custom_label: customLabel || null,
+          p_passport_document_id: passportDocumentId || null,
+          p_is_primary: isPrimary || false,
+          p_notes: notes || null,
+          p_document_id: documentId || null
+        })
+        
+        if (error) throw error
+        
+        return new Response(
+          JSON.stringify({ success: true, documentId: data }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
     }
     
     if (action === 'decrypt') {
       // Descriptografar documento
-      const { documentId } = params
+      const { documentId, isProfileDocument } = params
       
-      // Buscar via RPC (já registra auditoria)
-      const { data, error } = await supabaseClient.rpc('get_decrypted_document', {
-        p_document_id: documentId
-      })
-      
-      if (error) throw error
-      if (!data || data.length === 0) throw new Error('Documento não encontrado')
-      
-      const { doc_number_enc, doc_number_iv } = data[0]
-      const decrypted = await decryptDocument(doc_number_enc, doc_number_iv)
-      
-      return new Response(
-        JSON.stringify({ success: true, docNumber: decrypted }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      if (isProfileDocument) {
+        // Buscar documento de perfil global
+        const { data, error } = await supabaseClient
+          .from('td_traveler_profile_documents')
+          .select('doc_number_enc, doc_number_iv')
+          .eq('id', documentId)
+          .single()
+        
+        if (error) throw error
+        if (!data) throw new Error('Documento não encontrado')
+        
+        const decrypted = await decryptDocument(data.doc_number_enc, data.doc_number_iv)
+        
+        return new Response(
+          JSON.stringify({ success: true, docNumber: decrypted }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      } else {
+        // Buscar via RPC (já registra auditoria)
+        const { data, error } = await supabaseClient.rpc('get_decrypted_document', {
+          p_document_id: documentId
+        })
+        
+        if (error) throw error
+        if (!data || data.length === 0) throw new Error('Documento não encontrado')
+        
+        const { doc_number_enc, doc_number_iv } = data[0]
+        const decrypted = await decryptDocument(doc_number_enc, doc_number_iv)
+        
+        return new Response(
+          JSON.stringify({ success: true, docNumber: decrypted }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
     }
     
     throw new Error('Ação inválida')

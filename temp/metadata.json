@@ -1,0 +1,5 @@
+{
+  "name": "TripDivide - Gestor de Orçamentos em Grupo",
+  "description": "Um app colaborativo para gerenciar orçamentos e despesas de viagens em grupo, projetado para casais compararem cotações, votarem e dividirem custos automaticamente.",
+  "requestFramePermissions": []
+}

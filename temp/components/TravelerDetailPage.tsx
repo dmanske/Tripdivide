@@ -73,12 +73,16 @@ const TravelerDetailPage: React.FC<TravelerDetailPageProps> = ({ trip, travelerI
   const loadTravelerData = async () => {
     setLoading(true);
     try {
+      console.log('🔍 Carregando viajante:', travelerId);
       const travelers = await dataProvider.getTravelers(trip.id);
+      console.log('📋 Viajantes encontrados:', travelers.length);
       const t = travelers.find(tr => tr.id === travelerId);
       
       if (t) {
+        console.log('✅ Viajante encontrado:', t.fullName);
         setTraveler(t);
         const docs = await dataProvider.getTravelerDocuments(t.id);
+        console.log('📄 Documentos carregados:', docs.length);
         setDocuments(docs);
       } else {
         console.error('❌ Viajante não encontrado com ID:', travelerId);

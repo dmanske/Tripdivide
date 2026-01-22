@@ -3,7 +3,7 @@ import { Trip, Traveler, TravelerType, DocType, Couple } from '../types';
 import { Button, Input, Badge, Card } from './CommonUI';
 import PhoneInput from './PhoneInput';
 import { dateToInput } from '../lib/formatters';
-import { supabaseDataProvider } from '../lib/supabaseDataProvider';
+import { dataProvider } from '../lib/dataProvider';
 import DocumentDrawer from './DocumentDrawer';
 
 // Funções de formatação de documentos
@@ -47,14 +47,13 @@ const unformatDocNumber = (value: string): string => {
 };
 
 interface TravelerWizardProps {
-  tripId?: string; // Opcional - se fornecido, cria vínculo com viagem
-  trip?: Trip; // Opcional - necessário apenas se tripId fornecido
-  existingProfileId?: string; // Para edição de perfil existente
-  onDone?: (profileId: string) => void; // Retorna o profileId criado/editado
+  trip: Trip;
+  initialData?: Partial<Traveler>;
+  onSave: (traveler: Traveler) => void;
   onCancel: () => void;
 }
 
-const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingProfileId, onDone, onCancel }) => {
+const TravelerWizard: React.FC<TravelerWizardProps> = ({ trip, initialData, onSave, onCancel }) => {
   const [step, setStep] = useState(1);
   const [showNewGroupInput, setShowNewGroupInput] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
@@ -65,89 +64,51 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
   const [showDocNumber, setShowDocNumber] = useState(true); // Mostrar por padrão
   const [tagInput, setTagInput] = useState('');
   const [loadingDocs, setLoadingDocs] = useState(false);
-  const [profileId, setProfileId] = useState<string | undefined>(existingProfileId);
-  const [tripTravelerId, setTripTravelerId] = useState<string | undefined>();
   
-  // Dados do perfil global (Step 1)
-  const [profileData, setProfileData] = useState<any>({
-    fullName: '',
-    nickname: '',
-    phone: '',
-    email: '',
-    birthDate: '',
+  const [formData, setFormData] = useState<Partial<Traveler>>({
+    tripId: trip.id,
+    type: TravelerType.ADULT,
+    coupleId: trip.couples[0]?.id || '',
+    goesToSegments: trip.segments
+      .filter(s => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s.id))
+      .map(s => s.id),
+    isPayer: true,
     canDrive: false,
     tags: [],
-    notes: ''
-  });
-  
-  // Dados específicos da viagem (Step 2)
-  const [tripData, setTripData] = useState<any>({
-    type: TravelerType.ADULT,
-    coupleId: trip?.couples[0]?.id || '',
-    goesToSegments: trip?.segments
-      .filter(s => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s.id))
-      .map(s => s.id) || [],
-    isPayer: true,
-    countInSplit: true
+    status: 'Ativo',
+    ...initialData
   });
 
-  // Carregar perfil e documentos se estiver editando
+  // Carregar documentos descriptografados ao abrir para edição
   useEffect(() => {
-    const loadProfile = async () => {
-      if (existingProfileId) {
+    const loadDocuments = async () => {
+      if (initialData?.id) {
         setLoadingDocs(true);
         try {
-          const profile = await supabaseDataProvider.getTravelerProfileById(existingProfileId);
-          if (profile) {
-            setProfileData({
-              fullName: profile.full_name || '',
-              nickname: profile.nickname || '',
-              phone: profile.phone || '',
-              email: profile.email || '',
-              birthDate: profile.birth_date || '',
-              canDrive: profile.can_drive || false,
-              tags: profile.tags || [],
-              notes: profile.notes || ''
-            });
-            
-            const docs = await supabaseDataProvider.getTravelerProfileDocuments(existingProfileId);
-            setDocuments(docs);
-            
-            if (tripId) {
-              const tripTravelers = await supabaseDataProvider.getTripTravelers(tripId);
-              const link = tripTravelers.find((tt: any) => tt.traveler_profile_id === existingProfileId);
-              if (link) {
-                setTripTravelerId(link.id);
-                setTripData({
-                  type: link.type || TravelerType.ADULT,
-                  coupleId: link.couple_id || trip?.couples[0]?.id || '',
-                  goesToSegments: link.goes_to_segments || [],
-                  isPayer: link.is_payer !== undefined ? link.is_payer : true,
-                  countInSplit: link.count_in_split !== undefined ? link.count_in_split : true
-                });
-              }
-            }
-          }
+          const docs = await dataProvider.getTravelerDocuments(initialData.id);
+          setDocuments(docs);
         } catch (error) {
-          console.error('Erro ao carregar perfil:', error);
+          console.error('Erro ao carregar documentos:', error);
+          setDocuments(initialData?.documents || []);
         } finally {
           setLoadingDocs(false);
         }
+      } else {
+        setDocuments([]);
       }
     };
     
-    loadProfile();
-  }, [existingProfileId, tripId]);
+    loadDocuments();
+  }, [initialData?.id]);
 
   // Ajustar defaults baseado no tipo
   useEffect(() => {
-    if (tripData.type === TravelerType.INFANT || tripData.type === "Pet") {
-      setTripData((prev: any) => ({ ...prev, isPayer: false, countInSplit: false }));
-      setProfileData((prev: any) => ({ ...prev, canDrive: false }));
-    } else if (tripData.type === TravelerType.ADULT) {
-      setTripData((prev: any) => ({ ...prev, isPayer: true, countInSplit: true }));
+    if (formData.type === TravelerType.BABY || formData.type === TravelerType.PET) {
+      setFormData(prev => ({ ...prev, isPayer: false, canDrive: false }));
+    } else if (formData.type === TravelerType.ADULT) {
+      setFormData(prev => ({ ...prev, isPayer: true }));
     }
-  }, [tripData.type]);
+  }, [formData.type]);
 
   const steps = [
     { id: 1, title: 'Básico' },
@@ -155,79 +116,13 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
     { id: 3, title: 'Documentos' }
   ];
 
-  const handleNext = async () => {
-    // Step 1 -> Step 2 (or 3 if no trip): Salvar perfil global
-    if (step === 1) {
-      try {
-        const saved = await supabaseDataProvider.saveTravelerProfile({
-          id: profileId,
-          full_name: profileData.fullName,
-          nickname: profileData.nickname,
-          phone: profileData.phone,
-          email: profileData.email,
-          birth_date: profileData.birthDate,
-          can_drive: profileData.canDrive,
-          tags: profileData.tags,
-          notes: profileData.notes
-        });
-        if (saved?.id) setProfileId(saved.id);
-        
-        // Se não tem trip, pula direto para step 3 (documentos)
-        if (!tripId) {
-          setStep(3);
-          return;
-        }
-      } catch (error) {
-        console.error('Erro ao salvar perfil:', error);
-        return;
-      }
-    }
-    
-    // Step 2 -> Step 3: Salvar vínculo se tripId existe
-    if (step === 2 && tripId && profileId) {
-      try {
-        if (tripTravelerId) {
-          await supabaseDataProvider.updateTripTraveler(tripTravelerId, {
-            type: tripData.type,
-            coupleId: tripData.coupleId,
-            goesToSegments: tripData.goesToSegments,
-            isPayer: tripData.isPayer,
-            countInSplit: tripData.countInSplit
-          });
-        } else {
-          const link = await supabaseDataProvider.linkTravelerToTrip({
-            tripId,
-            travelerProfileId: profileId,
-            type: tripData.type,
-            coupleId: tripData.coupleId,
-            goesToSegments: tripData.goesToSegments,
-            isPayer: tripData.isPayer,
-            countInSplit: tripData.countInSplit
-          });
-          if (link?.id) setTripTravelerId(link.id);
-        }
-      } catch (error) {
-        console.error('Erro ao vincular:', error);
-        return;
-      }
-    }
-    
-    setStep(s => Math.min(s + 1, 3));
-  };
-  
-  const handleBack = () => {
-    // Se está no step 3 e não tem trip, volta direto para step 1
-    if (step === 3 && !tripId) {
-      setStep(1);
-    } else {
-      setStep(s => Math.max(s - 1, 1));
-    }
-  };
+  const handleNext = () => setStep(s => Math.min(s + 1, 3));
+  const handleBack = () => setStep(s => Math.max(s - 1, 1));
 
   // Validação do Step 1
   const isStep1Valid = () => {
-    if (!profileData.fullName || !profileData.fullName.trim()) return false;
-    if ((tripData.type === TravelerType.CHILD || tripData.type === TravelerType.INFANT) && !profileData.birthDate) return false;
+    if (!formData.fullName || !formData.fullName.trim()) return false;
+    if ((formData.type === TravelerType.CHILD || formData.type === TravelerType.BABY) && !formData.birthDate) return false;
     return true;
   };
 
@@ -238,19 +133,19 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
   };
 
   const addTag = () => {
-    if (tagInput.trim() && !profileData.tags?.includes(tagInput.trim())) {
-      setProfileData({
-        ...profileData,
-        tags: [...(profileData.tags || []), tagInput.trim()]
+    if (tagInput.trim() && !formData.tags?.includes(tagInput.trim())) {
+      setFormData({
+        ...formData,
+        tags: [...(formData.tags || []), tagInput.trim()]
       });
       setTagInput('');
     }
   };
 
   const removeTag = (tag: string) => {
-    setProfileData({
-      ...profileData,
-      tags: profileData.tags?.filter(t => t !== tag)
+    setFormData({
+      ...formData,
+      tags: formData.tags?.filter(t => t !== tag)
     });
   };
 
@@ -280,95 +175,92 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in duration-300">
              <Input 
                label="Nome Completo *" 
-               value={profileData.fullName} 
-               onChange={e => setProfileData({...profileData, fullName: e.target.value})} 
+               value={formData.fullName} 
+               onChange={e => setFormData({...formData, fullName: e.target.value})} 
                placeholder="Como o grupo conhece" 
              />
              <Input 
                label="Apelido" 
-               value={profileData.nickname} 
-               onChange={e => setProfileData({...profileData, nickname: e.target.value})} 
+               value={formData.nickname} 
+               onChange={e => setFormData({...formData, nickname: e.target.value})} 
                placeholder="Opcional" 
              />
-             <Input as="select" label="Tipo *" value={tripData.type} onChange={e => setTripData({...tripData, type: e.target.value as any})}>
+             <Input as="select" label="Tipo *" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as any})}>
                 {Object.values(TravelerType).map(t => <option key={t} value={t}>{t}</option>)}
              </Input>
-             {trip && (
-               <div>
-                 <label className="block text-sm font-medium text-gray-400 mb-2">Casal / Grupo *</label>
-                 {!showNewGroupInput ? (
+             <div>
+               <label className="block text-sm font-medium text-gray-400 mb-2">Casal / Grupo *</label>
+               {!showNewGroupInput ? (
+                 <div className="flex gap-2">
+                   <select 
+                     value={formData.coupleId} 
+                     onChange={e => setFormData({...formData, coupleId: e.target.value})}
+                     className="flex-1 px-4 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                   >
+                     {trip.couples.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                   </select>
+                   <Button 
+                     variant="outline" 
+                     className="text-xs whitespace-nowrap"
+                     onClick={(e) => {
+                       e.preventDefault();
+                       setShowNewGroupInput(true);
+                       setNewGroupName('');
+                     }}
+                   >
+                     + Grupo
+                   </Button>
+                 </div>
+               ) : (
+                 <div className="space-y-2">
                    <div className="flex gap-2">
-                     <select 
-                       value={tripData.coupleId} 
-                       onChange={e => setTripData({...tripData, coupleId: e.target.value})}
-                       className="flex-1 px-4 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
-                     >
-                       {trip?.couples?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                     </select>
-                     <Button 
-                       variant="outline" 
-                       className="text-xs whitespace-nowrap"
-                       onClick={(e) => {
-                         e.preventDefault();
-                         setShowNewGroupInput(true);
-                         setNewGroupName('');
-                       }}
-                     >
-                       + Grupo
-                     </Button>
-                   </div>
-                 ) : (
-                   <div className="space-y-2">
-                     <div className="flex gap-2">
-                       <input
-                         type="text"
-                         value={newGroupName}
-                         onChange={e => setNewGroupName(e.target.value)}
-                         placeholder="Nome do novo grupo"
-                         className="flex-1 px-4 py-2.5 bg-gray-950 border border-indigo-500 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-indigo-400 transition-colors"
-                         autoFocus
-                         onKeyDown={async (e) => {
-                           if (e.key === 'Enter' && newGroupName.trim()) {
-                             e.preventDefault();
-                             if (!trip?.id) return;
-                             const newCouple = await supabaseDataProvider.saveCouple(trip.id, { name: newGroupName.trim() });
-                             if (newCouple) {
-                               trip.couples.push({ id: newCouple.id, name: newCouple.name, members: [] });
-                               setTripData({...tripData, coupleId: newCouple.id});
-                               setShowNewGroupInput(false);
-                               setNewGroupName('');
-                             }
-                           } else if (e.key === 'Escape') {
+                     <input
+                       type="text"
+                       value={newGroupName}
+                       onChange={e => setNewGroupName(e.target.value)}
+                       placeholder="Nome do novo grupo"
+                       className="flex-1 px-4 py-2.5 bg-gray-950 border border-indigo-500 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-indigo-400 transition-colors"
+                       autoFocus
+                       onKeyDown={async (e) => {
+                         if (e.key === 'Enter' && newGroupName.trim()) {
+                           e.preventDefault();
+                           const newCouple = await dataProvider.saveCouple(trip.id, { name: newGroupName.trim() });
+                           if (newCouple) {
+                             trip.couples.push({ id: newCouple.id, name: newCouple.name, members: [] });
+                             setFormData({...formData, coupleId: newCouple.id});
                              setShowNewGroupInput(false);
                              setNewGroupName('');
                            }
-                         }}
-                       />
-                       <Button 
-                         variant="primary" 
-                         className="text-xs whitespace-nowrap"
-                         disabled={!newGroupName.trim()}
-                         onClick={async (e) => {
-                           e.preventDefault();
-                           if (newGroupName.trim()) {
-                             if (!trip?.id) return;
-                             const newCouple = await supabaseDataProvider.saveCouple(trip.id, { name: newGroupName.trim() });
-                             if (newCouple) {
-                               trip.couples.push({ id: newCouple.id, name: newCouple.name, members: [] });
-                               setTripData({...tripData, coupleId: newCouple.id});
-                               setShowNewGroupInput(false);
-                               setNewGroupName('');
-                             }
+                         } else if (e.key === 'Escape') {
+                           setShowNewGroupInput(false);
+                           setNewGroupName('');
+                         }
+                       }}
+                     />
+                     <Button 
+                       variant="primary" 
+                       className="text-xs whitespace-nowrap"
+                       disabled={!newGroupName.trim()}
+                       onClick={async (e) => {
+                         e.preventDefault();
+                         if (newGroupName.trim()) {
+                           const newCouple = await dataProvider.saveCouple(trip.id, { name: newGroupName.trim() });
+                           if (newCouple) {
+                             trip.couples.push({ id: newCouple.id, name: newCouple.name, members: [] });
+                             setFormData({...formData, coupleId: newCouple.id});
+                             setShowNewGroupInput(false);
+                             setNewGroupName('');
                            }
-                         }}
-                       >
-                         Criar
-                       </Button>
-                       <Button 
-                         variant="ghost" 
-                         className="text-xs"
-                         onClick={(e) => {
-                           e.preventDefault();
+                         }
+                       }}
+                     >
+                       Criar
+                     </Button>
+                     <Button 
+                       variant="ghost" 
+                       className="text-xs"
+                       onClick={(e) => {
+                         e.preventDefault();
                          setShowNewGroupInput(false);
                          setNewGroupName('');
                        }}
@@ -380,23 +272,22 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
                  </div>
                )}
              </div>
-             )}
              
              {/* Data de Nascimento - obrigatória para Criança/Bebê */}
-             {tripData.type !== "Pet" && (
+             {formData.type !== TravelerType.PET && (
                <Input 
-                 label={`Data de Nascimento ${(tripData.type === TravelerType.CHILD || tripData.type === TravelerType.INFANT) ? '*' : ''}`}
+                 label={`Data de Nascimento ${(formData.type === TravelerType.CHILD || formData.type === TravelerType.BABY) ? '*' : ''}`}
                  type="date" 
-                 value={dateToInput(profileData.birthDate)} 
-                 onChange={e => setProfileData({...profileData, birthDate: e.target.value})} 
+                 value={dateToInput(formData.birthDate)} 
+                 onChange={e => setFormData({...formData, birthDate: e.target.value})} 
                />
              )}
              
              <div>
                <label className="block text-sm font-medium text-gray-400 mb-2">WhatsApp (Fone)</label>
                <PhoneInput 
-                 value={profileData.phone || ''} 
-                 onChange={phone => setProfileData({...profileData, phone})} 
+                 value={formData.phone || ''} 
+                 onChange={phone => setFormData({...formData, phone})} 
                  placeholder="(00) 00000-0000"
                  className="w-full px-4 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
                />
@@ -404,8 +295,8 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
              <Input 
                label="Email" 
                className="col-span-1 md:col-span-2" 
-               value={profileData.email} 
-               onChange={e => setProfileData({...profileData, email: e.target.value})} 
+               value={formData.email} 
+               onChange={e => setFormData({...formData, email: e.target.value})} 
                placeholder="Recomendado para comunicação"
              />
           </div>
@@ -419,14 +310,14 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
                   <label className="block text-sm font-medium text-gray-400">Segmentos da Viagem</label>
                   <div className="flex gap-2">
                     <button 
-                      onClick={() => setTripData({...tripData, goesToSegments: trip?.segments?.map(s => s.id) || []})}
+                      onClick={() => setFormData({...formData, goesToSegments: trip.segments.map(s => s.id)})}
                       className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold uppercase"
                     >
                       Marcar todos
                     </button>
                     <span className="text-gray-700">•</span>
                     <button 
-                      onClick={() => setTripData({...tripData, goesToSegments: []})}
+                      onClick={() => setFormData({...formData, goesToSegments: []})}
                       className="text-[10px] text-gray-500 hover:text-gray-400 font-bold uppercase"
                     >
                       Limpar
@@ -434,12 +325,12 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                   {trip?.segments?.map(s => (
-                     <label key={s.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${tripData.goesToSegments?.includes(s.id) ? 'bg-indigo-600/10 border-indigo-500/40 text-white' : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-700'}`}>
-                        <input type="checkbox" className="w-4 h-4 accent-indigo-500" checked={tripData.goesToSegments?.includes(s.id)} onChange={e => {
-                          const ids = tripData.goesToSegments || [];
+                   {trip.segments.map(s => (
+                     <label key={s.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${formData.goesToSegments?.includes(s.id) ? 'bg-indigo-600/10 border-indigo-500/40 text-white' : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-700'}`}>
+                        <input type="checkbox" className="w-4 h-4 accent-indigo-500" checked={formData.goesToSegments?.includes(s.id)} onChange={e => {
+                          const ids = formData.goesToSegments || [];
                           const next = e.target.checked ? [...ids, s.id] : ids.filter(x => x !== s.id);
-                          setTripData({...tripData, goesToSegments: next});
+                          setFormData({...formData, goesToSegments: next});
                         }} />
                         <span className="text-sm font-bold">{s.name}</span>
                      </label>
@@ -456,19 +347,19 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
                    <input 
                      type="checkbox" 
                      className="w-6 h-6 accent-emerald-500" 
-                     checked={tripData.isPayer} 
-                     onChange={e => setTripData({...tripData, isPayer: e.target.checked})} 
-                     disabled={tripData.type === TravelerType.INFANT || tripData.type === "Pet"}
+                     checked={formData.isPayer} 
+                     onChange={e => setFormData({...formData, isPayer: e.target.checked})} 
+                     disabled={formData.type === TravelerType.BABY || formData.type === TravelerType.PET}
                    />
                 </div>
                 
-                {tripData.type === TravelerType.ADULT && (
+                {formData.type === TravelerType.ADULT && (
                   <div className="p-4 bg-gray-950 border border-gray-800 rounded-xl flex items-center justify-between">
                      <div>
                         <p className="text-sm font-bold">Pode Dirigir?</p>
                         <p className="text-[10px] text-gray-600 uppercase">CNH Habilitada</p>
                      </div>
-                     <input type="checkbox" className="w-6 h-6 accent-indigo-500" checked={profileData.canDrive} onChange={e => setProfileData({...profileData, canDrive: e.target.checked})} />
+                     <input type="checkbox" className="w-6 h-6 accent-indigo-500" checked={formData.canDrive} onChange={e => setFormData({...formData, canDrive: e.target.checked})} />
                   </div>
                 )}
              </div>
@@ -477,7 +368,7 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
              <div>
                <label className="block text-sm font-medium text-gray-400 mb-2">Tags</label>
                <div className="flex flex-wrap gap-2 mb-2">
-                 {profileData.tags?.map(tag => (
+                 {formData.tags?.map(tag => (
                    <Badge key={tag} color="indigo" className="flex items-center gap-1">
                      {tag}
                      <button onClick={() => removeTag(tag)} className="ml-1 hover:text-red-400">✕</button>
@@ -502,8 +393,8 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
                as="textarea" 
                label="Observações Livres" 
                rows={2} 
-               value={profileData.notes} 
-               onChange={e => setProfileData({...profileData, notes: e.target.value})} 
+               value={formData.notes} 
+               onChange={e => setFormData({...formData, notes: e.target.value})} 
                placeholder="Detalhes adicionais, restrições, preferências..."
              />
           </div>
@@ -1023,47 +914,22 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
            ) : (
              <Button 
                variant="primary" 
-               onClick={async () => {
-                 // Salvar documentos pendentes no perfil
-                 if (profileId) {
-                   for (const doc of documents) {
-                     if (!doc.id) {
-                       try {
-                         await supabaseDataProvider.saveTravelerProfileDocument({
-                           travelerProfileId: profileId,
-                           docType: doc.docType,
-                           docCategory: doc.docCategory,
-                           docNumber: doc.docNumber,
-                           issuingCountry: doc.issuingCountry,
-                           issuerState: doc.issuerState,
-                           issuerAgency: doc.issuerAgency,
-                           issuerPlace: doc.issuerPlace,
-                           regionOrCountry: doc.regionOrCountry,
-                           issueDate: doc.issueDate,
-                           docExpiry: doc.docExpiry,
-                           visaCategory: doc.visaCategory,
-                           entryType: doc.entryType,
-                           stayDurationDays: doc.stayDurationDays,
-                           licenseCategory: doc.licenseCategory,
-                           customLabel: doc.customLabel,
-                           isPrimary: doc.isPrimary,
-                           notes: doc.notes
-                         });
-                       } catch (error) {
-                         console.error('Erro ao salvar documento:', error);
-                       }
-                     }
-                   }
-                 }
+               onClick={() => {
+                 // Filtrar IDs inválidos (como "seg-all") antes de salvar
+                 const validSegments = (formData.goesToSegments || []).filter(id => {
+                   // Verificar se é um UUID válido (formato: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+                   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+                 });
                  
-                 // Chamar onDone com o profileId
-                 if (onDone && profileId) {
-                   onDone(profileId);
-                 }
+                 onSave({
+                   ...formData, 
+                   goesToSegments: validSegments,
+                   documents
+                 } as Traveler);
                }} 
-               disabled={!isStep1Valid() || !profileId}
+               disabled={!isStep1Valid()}
              >
-               {existingProfileId ? 'Salvar Alterações' : 'Concluir'}
+               Salvar Viajante
              </Button>
            )}
         </div>

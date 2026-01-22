@@ -2,29 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { Button, Card, Input, Badge, Modal } from './CommonUI';
 import { ICONS } from '../constants';
 import { supabaseDataProvider } from '../lib/supabaseDataProvider';
+import TravelerWizard from './TravelerWizard';
+import { formatPhone } from '../lib/formatters';
 
 interface TravelerProfileListProps {
-  onNavigate: (tab: string) => void;
+  onNavigateToDetail: (profileId: string) => void;
 }
 
-const TravelerProfileList: React.FC<TravelerProfileListProps> = ({ onNavigate }) => {
+const TravelerProfileList: React.FC<TravelerProfileListProps> = ({ onNavigateToDetail }) => {
   const [profiles, setProfiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showNewProfile, setShowNewProfile] = useState(false);
-  const [editingProfile, setEditingProfile] = useState<any>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    fullName: '',
-    nickname: '',
-    type: 'Adulto',
-    phone: '',
-    email: '',
-    birthDate: '',
-    canDrive: false,
-    tags: [] as string[],
-    notes: ''
-  });
 
   useEffect(() => {
     loadProfiles();
@@ -42,49 +32,6 @@ const TravelerProfileList: React.FC<TravelerProfileListProps> = ({ onNavigate })
     }
   };
 
-  const handleSave = async () => {
-    try {
-      await supabaseDataProvider.saveTravelerProfile({
-        id: editingProfile?.id,
-        ...formData
-      });
-      
-      setShowNewProfile(false);
-      setEditingProfile(null);
-      setFormData({
-        fullName: '',
-        nickname: '',
-        type: 'Adulto',
-        phone: '',
-        email: '',
-        birthDate: '',
-        canDrive: false,
-        tags: [],
-        notes: ''
-      });
-      
-      await loadProfiles();
-    } catch (error) {
-      console.error('Erro ao salvar perfil:', error);
-    }
-  };
-
-  const handleEdit = (profile: any) => {
-    setEditingProfile(profile);
-    setFormData({
-      fullName: profile.full_name,
-      nickname: profile.nickname || '',
-      type: profile.type,
-      phone: profile.phone || '',
-      email: profile.email || '',
-      birthDate: profile.birth_date || '',
-      canDrive: profile.can_drive || false,
-      tags: profile.tags || [],
-      notes: profile.notes || ''
-    });
-    setShowNewProfile(true);
-  };
-
   const handleDelete = async (id: string) => {
     try {
       await supabaseDataProvider.deleteTravelerProfile(id);
@@ -98,7 +45,8 @@ const TravelerProfileList: React.FC<TravelerProfileListProps> = ({ onNavigate })
   const filteredProfiles = profiles.filter(p => 
     p.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.nickname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.phone?.includes(searchTerm)
+    p.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.phone?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   if (loading) {
@@ -115,14 +63,14 @@ const TravelerProfileList: React.FC<TravelerProfileListProps> = ({ onNavigate })
         </div>
         <Button onClick={() => setShowNewProfile(true)} className="bg-indigo-600 hover:bg-indigo-700">
           <ICONS.Plus className="w-4 h-4 mr-2" />
-          Novo Perfil
+          Novo Viajante
         </Button>
       </div>
 
       {/* Search */}
       <Card className="!p-4 bg-gray-900/40 border-gray-800">
         <Input 
-          placeholder="Buscar por nome, apelido ou telefone..." 
+          placeholder="Buscar por nome, apelido, email ou telefone..." 
           value={searchTerm} 
           onChange={e => setSearchTerm(e.target.value)} 
         />
@@ -136,16 +84,16 @@ const TravelerProfileList: React.FC<TravelerProfileListProps> = ({ onNavigate })
             <div className="text-sm text-gray-400 mt-1">Total</div>
           </div>
         </Card>
-        <Card className="!bg-cyan-600/20 !border-cyan-600/30">
+        <Card className="!bg-blue-600/20 !border-blue-600/30">
           <div className="text-center">
-            <div className="text-3xl font-black text-white">{profiles.filter(p => p.type === 'Adulto').length}</div>
-            <div className="text-sm text-gray-400 mt-1">Adultos</div>
+            <div className="text-3xl font-black text-white">{profiles.filter(p => p.can_drive).length}</div>
+            <div className="text-sm text-gray-400 mt-1">Motoristas</div>
           </div>
         </Card>
-        <Card className="!bg-yellow-600/20 !border-yellow-600/30">
+        <Card className="!bg-green-600/20 !border-green-600/30">
           <div className="text-center">
-            <div className="text-3xl font-black text-white">{profiles.filter(p => p.type !== 'Adulto').length}</div>
-            <div className="text-sm text-gray-400 mt-1">Crianças</div>
+            <div className="text-3xl font-black text-white">{profiles.filter(p => p.email || p.phone).length}</div>
+            <div className="text-sm text-gray-400 mt-1">Com Contato</div>
           </div>
         </Card>
       </div>
@@ -160,37 +108,57 @@ const TravelerProfileList: React.FC<TravelerProfileListProps> = ({ onNavigate })
           </Button>
         </Card>
       ) : (
-        <div className="grid gap-3">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredProfiles.map(profile => (
             <Card 
               key={profile.id} 
               className="!p-4 hover:!border-indigo-600/50 transition-all cursor-pointer" 
-              onClick={() => onNavigate(`profile-${profile.id}`)}
+              onClick={() => onNavigateToDetail(profile.id)}
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
-                    profile.type === 'Adulto' ? 'bg-indigo-600/20 text-indigo-400' : 'bg-yellow-600/20 text-yellow-400'
-                  }`}>
-                    {profile.full_name?.charAt(0) || '?'}
-                  </div>
-                  <div>
-                    <div className="font-bold text-white">{profile.full_name}</div>
-                    <div className="text-sm text-gray-500">
-                      {profile.type}
-                      {profile.nickname && ` • ${profile.nickname}`}
-                      {profile.phone && ` • ${profile.phone}`}
-                    </div>
-                  </div>
+              <div className="space-y-3">
+                <div>
+                  <div className="font-bold text-white text-lg">{profile.full_name}</div>
+                  {profile.nickname && (
+                    <div className="text-xs text-gray-500">"{profile.nickname}"</div>
+                  )}
                 </div>
-                <div className="flex items-center gap-2">
-                  {profile.can_drive && <Badge color="green">Dirige</Badge>}
-                  <Badge color="gray">{profile.type}</Badge>
+
+                {/* Badges */}
+                <div className="flex flex-wrap gap-1">
+                  {profile.can_drive && (
+                    <Badge color="blue" className="text-[9px]">🚗 DIRIGE</Badge>
+                  )}
+                  {profile.tags && profile.tags.length > 0 && profile.tags.map((tag: string) => (
+                    <Badge key={tag} color="gray" className="text-[9px]">{tag}</Badge>
+                  ))}
+                </div>
+
+                {/* Contato */}
+                <div className="space-y-1 text-xs text-gray-400">
+                  {profile.phone && (
+                    <div className="flex items-center gap-2">
+                      <span>📞</span>
+                      <span>{formatPhone(profile.phone)}</span>
+                    </div>
+                  )}
+                  {profile.email && (
+                    <div className="flex items-center gap-2">
+                      <span>✉️</span>
+                      <span className="truncate">{profile.email}</span>
+                    </div>
+                  )}
+                  {!profile.phone && !profile.email && (
+                    <div className="text-gray-600 italic">Sem contato</div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between pt-3 border-t border-gray-800">
+                  <Badge color="indigo">Ver Perfil →</Badge>
                   <Button 
                     onClick={(e) => { e.stopPropagation(); setConfirmDelete(profile.id); }} 
                     className="bg-red-600/20 hover:bg-red-600/30 text-red-400 text-xs"
                   >
-                    Arquivar
+                    Excluir
                   </Button>
                 </div>
               </div>
@@ -203,118 +171,29 @@ const TravelerProfileList: React.FC<TravelerProfileListProps> = ({ onNavigate })
       {confirmDelete && (
         <Modal isOpen={true} onClose={() => setConfirmDelete(null)}>
           <div className="p-6">
-            <h3 className="text-xl font-bold text-white mb-4">Confirmar Arquivamento</h3>
-            <p className="text-gray-400 mb-6">Tem certeza que deseja arquivar este perfil? Ele não será mais exibido na lista.</p>
+            <h3 className="text-xl font-bold text-white mb-4">Confirmar Exclusão</h3>
+            <p className="text-gray-400 mb-6">Tem certeza que deseja excluir este perfil? Esta ação não pode ser desfeita.</p>
             <div className="flex gap-3 justify-end">
               <Button onClick={() => setConfirmDelete(null)} className="bg-gray-800 hover:bg-gray-700">
                 Cancelar
               </Button>
               <Button onClick={() => handleDelete(confirmDelete)} className="bg-red-600 hover:bg-red-700">
-                Arquivar
+                Excluir
               </Button>
             </div>
           </div>
         </Modal>
       )}
 
-      {/* Modal de criação/edição */}
-      <Modal isOpen={showNewProfile} onClose={() => { setShowNewProfile(false); setEditingProfile(null); }}>
-        <div className="p-6 space-y-4">
-          <h3 className="text-xl font-bold text-white">{editingProfile ? 'Editar Perfil' : 'Novo Perfil'}</h3>
-          
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-bold text-gray-400 mb-1">Nome Completo *</label>
-              <Input 
-                value={formData.fullName} 
-                onChange={e => setFormData({...formData, fullName: e.target.value})}
-                placeholder="Nome completo"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-bold text-gray-400 mb-1">Apelido</label>
-                <Input 
-                  value={formData.nickname} 
-                  onChange={e => setFormData({...formData, nickname: e.target.value})}
-                  placeholder="Apelido"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-400 mb-1">Tipo *</label>
-                <Input 
-                  as="select"
-                  value={formData.type} 
-                  onChange={e => setFormData({...formData, type: e.target.value})}
-                >
-                  <option value="Adulto">Adulto</option>
-                  <option value="Criança">Criança</option>
-                  <option value="Bebê">Bebê</option>
-                </Input>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-bold text-gray-400 mb-1">Telefone</label>
-                <Input 
-                  value={formData.phone} 
-                  onChange={e => setFormData({...formData, phone: e.target.value})}
-                  placeholder="+55 11 99999-9999"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-400 mb-1">Data de Nascimento</label>
-                <Input 
-                  type="date"
-                  value={formData.birthDate} 
-                  onChange={e => setFormData({...formData, birthDate: e.target.value})}
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-400 mb-1">Email</label>
-              <Input 
-                type="email"
-                value={formData.email} 
-                onChange={e => setFormData({...formData, email: e.target.value})}
-                placeholder="email@exemplo.com"
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input 
-                type="checkbox" 
-                checked={formData.canDrive} 
-                onChange={e => setFormData({...formData, canDrive: e.target.checked})}
-                className="w-4 h-4"
-              />
-              <label className="text-sm font-bold text-gray-400">Pode dirigir</label>
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-400 mb-1">Notas</label>
-              <textarea 
-                value={formData.notes} 
-                onChange={e => setFormData({...formData, notes: e.target.value})}
-                placeholder="Observações gerais..."
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2 text-white"
-                rows={3}
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-3 justify-end pt-4 border-t border-gray-800">
-            <Button onClick={() => { setShowNewProfile(false); setEditingProfile(null); }} className="bg-gray-800 hover:bg-gray-700">
-              Cancelar
-            </Button>
-            <Button onClick={handleSave} className="bg-indigo-600 hover:bg-indigo-700" disabled={!formData.fullName.trim()}>
-              {editingProfile ? 'Salvar' : 'Criar'}
-            </Button>
-          </div>
-        </div>
+      {/* Modal de criação */}
+      <Modal isOpen={showNewProfile} onClose={() => setShowNewProfile(false)} title="Novo Viajante" size="xl">
+        <TravelerWizard
+          onCancel={() => setShowNewProfile(false)}
+          onDone={async (profileId) => {
+            setShowNewProfile(false);
+            await loadProfiles();
+          }}
+        />
       </Modal>
     </div>
   );

@@ -307,14 +307,7 @@ const App: React.FC = () => {
           return <TravelerList trip={trip} onRefresh={() => loadData(view.tripId!)} onNavigateToDetail={(profileId) => setView({ type: 'traveler-profile-detail', profileId, returnTo: { type: 'travelers', tripId: view.tripId } })} />;
         } else {
           // Modo geral: gerenciar perfis globais
-          return <TravelerProfileList onNavigate={(tab) => {
-            if (tab.startsWith('profile-')) {
-              const profileId = tab.replace('profile-', '');
-              setView({ type: 'traveler-profile-detail', profileId });
-            } else {
-              setView({ type: tab as any });
-            }
-          }} />;
+          return <TravelerProfileList onNavigateToDetail={(profileId) => setView({ type: 'traveler-profile-detail', profileId, returnTo: { type: 'travelers' } })} />;
         }
       
       case 'traveler-detail': 

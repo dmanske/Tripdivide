@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { TravelerProfile, TravelerProfileDocument } from '../types';
-import { Card, Badge, Button, Input } from './CommonUI';
+import { Card, Badge, Button, Input, Modal } from './CommonUI';
 import { supabaseDataProvider } from '../lib/supabaseDataProvider';
+import TravelerWizard from './TravelerWizard';
 import DocumentDrawer from './DocumentDrawer';
 import { formatPhone, formatSupabaseDate } from '../lib/formatters';
 
@@ -16,28 +16,54 @@ const DOC_ICONS: Record<string, string> = {
   'Outro': '📋'
 };
 
+// Formatação de números
+const formatDocNumber = (value: string, docType: string): string => {
+  if (!value) return '';
+  const cleaned = value.replace(/[^A-Za-z0-9]/g, '');
+  
+  switch (docType) {
+    case 'CPF':
+      return cleaned.slice(0, 11)
+        .replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
+        .replace(/(\d{3})(\d{3})(\d{3})(\d{1})$/, '$1.$2.$3-$4')
+        .replace(/(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3')
+        .replace(/(\d{3})(\d{2})$/, '$1.$2');
+    case 'RG':
+      return cleaned.slice(0, 9)
+        .replace(/(\d{2})(\d{3})(\d{3})(\d{1})/, '$1.$2.$3-$4')
+        .replace(/(\d{2})(\d{3})(\d{3})$/, '$1.$2.$3')
+        .replace(/(\d{2})(\d{3})$/, '$1.$2');
+    case 'CNH':
+      return cleaned.slice(0, 11);
+    case 'Passaporte':
+      return cleaned.slice(0, 8).toUpperCase();
+    default:
+      return value;
+  }
+};
+
 interface TravelerProfileDetailPageProps {
   profileId: string;
   onBack: () => void;
   onRefresh: () => void;
 }
 
-const TravelerProfileDetailPage: React.FC<TravelerProfileDetailPageProps> = ({ 
-  profileId, 
-  onBack, 
-  onRefresh 
-}) => {
-  const [profile, setProfile] = useState<TravelerProfile | null>(null);
-  const [documents, setDocuments] = useState<TravelerProfileDocument[]>([]);
+const TravelerProfileDetailPage: React.FC<TravelerProfileDetailPageProps> = ({ profileId, onBack, onRefresh }) => {
+  const [profile, setProfile] = useState<any | null>(null);
+  const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<any>(null);
   const [isAddingDocument, setIsAddingDocument] = useState(false);
   const [showDocTypeSelector, setShowDocTypeSelector] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
-  // Estado de edição
-  const [editedProfile, setEditedProfile] = useState<Partial<TravelerProfile>>({});
+  // Filtros
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'identity' | 'entry'>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     loadProfileData();
@@ -46,302 +72,700 @@ const TravelerProfileDetailPage: React.FC<TravelerProfileDetailPageProps> = ({
   const loadProfileData = async () => {
     setLoading(true);
     try {
-      const profiles = await supabaseDataProvider.getTravelerProfiles();
-      const p = profiles.find(pr => pr.id === profileId);
+      const profileData = await supabaseDataProvider.getTravelerProfileById(profileId);
       
-      if (p) {
-        setProfile(p);
-        setEditedProfile(p);
-        const docs = await supabaseDataProvider.getTravelerProfileDocuments(p.id);
+      if (profileData) {
+        setProfile(profileData);
+        const docs = await supabaseDataProvider.getTravelerProfileDocuments(profileId);
         setDocuments(docs);
+      } else {
+        console.error('❌ Perfil não encontrado com ID:', profileId);
       }
     } catch (error) {
-      console.error('Erro ao carregar perfil:', error);
+      console.error('❌ Erro ao carregar perfil:', error);
     }
+    
     setLoading(false);
   };
 
-  const handleSaveProfile = async () => {
+  const handleDeleteProfile = async () => {
     if (!profile) return;
-    
     try {
-      await supabaseDataProvider.saveTravelerProfile({
-        ...profile,
-        ...editedProfile
-      });
-      
-      showSuccess('Perfil atualizado com sucesso!');
-      setIsEditing(false);
-      await loadProfileData();
+      await supabaseDataProvider.deleteTravelerProfile(profile.id);
       onRefresh();
-    } catch (error) {
-      console.error('Erro ao salvar perfil:', error);
+      onBack();
+    } catch (error: any) {
+      console.error('Erro ao excluir perfil:', error);
+      // Mostrar erro inline (não usar alert)
     }
   };
 
   const handleSaveDocument = async (doc: any) => {
     try {
-      await supabaseDataProvider.saveTravelerProfileDocument({
-        ...doc,
-        travelerProfileId: profile?.id
-      });
+      // Validar número do documento
+      if (!doc.docNumber || doc.docNumber.trim() === '') {
+        setErrorMessage('Por favor, preencha o número do documento');
+        setTimeout(() => setErrorMessage(null), 5000);
+        return;
+      }
       
-      showSuccess('Documento salvo com sucesso!');
+      const mappedDoc = {
+        id: doc.id,
+        travelerProfileId: doc.travelerProfileId || profile?.id,
+        docType: doc.docType,
+        docCategory: doc.docCategory,
+        docNumber: doc.docNumber.trim(),
+        issuerCountry: doc.issuerCountry || '',
+        issuerState: doc.issuerState || '',
+        issuerAgency: doc.issuerAgency || '',
+        issuerPlace: doc.issuerPlace || '',
+        regionOrCountry: doc.regionOrCountry || '',
+        issueDate: doc.issueDate || '',
+        expiryDate: doc.expiryDate || doc.docExpiry || '',
+        visaCategory: doc.visaCategory || '',
+        entryType: doc.entryType || '',
+        stayDurationDays: doc.stayDurationDays || null,
+        licenseCategory: doc.licenseCategory || '',
+        customLabel: doc.customLabel || '',
+        passportDocumentId: doc.passportDocumentId || null,
+        isPrimary: doc.isPrimary || false,
+        notes: doc.notes || ''
+      };
+      
+      await supabaseDataProvider.saveTravelerProfileDocument(mappedDoc);
+      await loadProfileData();
+      setSuccessMessage('Documento salvo com sucesso!');
+      setTimeout(() => setSuccessMessage(null), 3000);
       setSelectedDocument(null);
       setIsAddingDocument(false);
-      await loadProfileData();
-    } catch (error) {
-      console.error('Erro ao salvar documento:', error);
+    } catch (error: any) {
+      setErrorMessage('Erro ao salvar documento: ' + error.message);
+      setTimeout(() => setErrorMessage(null), 5000);
     }
   };
 
   const handleDeleteDocument = async (docId: string) => {
     try {
       await supabaseDataProvider.deleteTravelerProfileDocument(docId);
-      showSuccess('Documento excluído com sucesso!');
-      setSelectedDocument(null);
       await loadProfileData();
-    } catch (error) {
-      console.error('Erro ao excluir documento:', error);
+      setSuccessMessage('Documento excluído com sucesso!');
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (error: any) {
+      setErrorMessage('Erro ao excluir documento: ' + error.message);
+      setTimeout(() => setErrorMessage(null), 5000);
     }
   };
 
-  const handleUpdateDocNumber = async (docId: string, newNumber: string) => {
-    // TODO: Implementar criptografia do número
-    console.log('Atualizar número do documento:', docId, newNumber);
-    showSuccess('Número do documento atualizado!');
+  const handleUpdateDocumentNumber = async (docId: string, newNumber: string) => {
+    try {
+      const currentDoc = documents.find(d => d.id === docId);
+      if (!currentDoc) return;
+
+      await supabaseDataProvider.saveTravelerProfileDocument({
+        ...currentDoc,
+        id: docId,
+        docNumber: newNumber
+      });
+
+      await loadProfileData();
+      setSuccessMessage('Número do documento atualizado com sucesso!');
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (error: any) {
+      setErrorMessage('Erro ao atualizar número: ' + error.message);
+      setTimeout(() => setErrorMessage(null), 5000);
+    }
   };
 
-  const handleAddDocument = (docType: string) => {
-    setSelectedDocument({
-      id: null,
+  const handleAddNewDocument = () => {
+    setShowDocTypeSelector(true);
+  };
+
+  const handleSelectDocType = (docType: string) => {
+    setShowDocTypeSelector(false);
+    setIsAddingDocument(true);
+    
+    const baseDoc = {
       travelerProfileId: profile?.id,
       docType,
+      docCategory: (docType === 'Visto' || docType === 'ESTA') ? 'entry' : 'identity',
+      docNumber: '',
+      notes: '',
+      issuerCountry: '',
+      issuerState: '',
+      issuerAgency: '',
+      issuerPlace: '',
+      regionOrCountry: '',
+      issueDate: '',
+      expiryDate: '',
+      visaCategory: '',
+      entryType: '',
+      stayDurationDays: null,
+      licenseCategory: '',
+      customLabel: '',
+      passportDocumentId: null,
       isPrimary: false
-    });
-    setIsAddingDocument(true);
-    setShowDocTypeSelector(false);
+    };
+
+    setSelectedDocument(baseDoc);
   };
 
-  const showSuccess = (message: string) => {
-    setSuccessMessage(message);
-    setTimeout(() => setSuccessMessage(null), 3000);
-  };
-
-  if (loading) {
+  if (loading || !profile) {
+    if (loading) {
+      return (
+        <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+          <p className="text-gray-500 animate-pulse">Carregando perfil...</p>
+        </div>
+      );
+    }
+    
+    // Perfil não encontrado
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-400">Carregando...</div>
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-400 mb-4">❌ Perfil não encontrado</p>
+          <Button variant="outline" onClick={onBack}>
+            ← Voltar para lista
+          </Button>
+        </div>
       </div>
     );
   }
 
-  if (!profile) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-400">Perfil não encontrado</div>
-      </div>
-    );
-  }
+  // Filtrar documentos
+  const filteredDocuments = documents.filter(doc => {
+    const matchesCategory = categoryFilter === 'all' || doc.docCategory === categoryFilter;
+    const matchesType = typeFilter === 'all' || doc.docType === typeFilter;
+    const matchesSearch = !searchTerm || 
+      doc.docNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      doc.issuerCountry?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      doc.issuerState?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      doc.customLabel?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    return matchesCategory && matchesType && matchesSearch;
+  });
 
-  const passports = documents.filter(d => d.docType === 'Passaporte');
+  // Agrupar documentos
+  const groupedDocs = {
+    passports: filteredDocuments.filter(d => d.docType === 'Passaporte'),
+    identity: filteredDocuments.filter(d => ['RG', 'CPF', 'CNH'].includes(d.docType)),
+    entry: filteredDocuments.filter(d => ['Visto', 'ESTA'].includes(d.docType)),
+    others: filteredDocuments.filter(d => d.docType === 'Outro')
+  };
+
+  // Perfis globais não têm issues (sem contexto de viagem)
+  const issues: any[] = [];
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+    <div className="min-h-screen bg-gray-950">
+      {/* Mensagem de sucesso */}
+      {successMessage && (
+        <div className="fixed top-4 right-4 z-50 bg-emerald-600 text-white px-6 py-3 rounded-xl shadow-lg animate-in slide-in-from-top-2 duration-300">
+          <p className="text-sm font-bold">✓ {successMessage}</p>
+        </div>
+      )}
+
+      {/* Mensagem de erro */}
+      {errorMessage && (
+        <div className="fixed top-4 right-4 z-50 bg-red-600 text-white px-6 py-3 rounded-xl shadow-lg animate-in slide-in-from-top-2 duration-300">
+          <p className="text-sm font-bold">✗ {errorMessage}</p>
+        </div>
+      )}
+
+      {/* Header Full Width */}
+      <div className="bg-gray-900/50 border-b border-gray-800 px-8 py-6">
+        <div className="max-w-[1600px] mx-auto">
+          {/* Breadcrumb */}
           <button
             onClick={onBack}
-            className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+            className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors mb-4"
           >
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
+            <span className="text-xs font-bold uppercase">Viajantes</span>
           </button>
-          <div>
-            <h1 className="text-3xl font-black text-white">{profile.fullName}</h1>
-            <p className="text-sm text-gray-500">Perfil Global de Viajante</p>
+
+          {/* Header principal */}
+          <div className="flex items-start justify-between gap-6">
+            <div className="flex-1">
+              <div className="flex items-center gap-4 mb-3">
+                <h1 className="text-3xl font-black text-white tracking-tight">{profile.full_name}</h1>
+                <div className="flex items-center gap-2">
+                  {profile.can_drive && <Badge color="blue" className="text-[10px] px-2 py-0.5">DIRIGE</Badge>}
+                </div>
+              </div>
+              
+              {/* Contato inline */}
+              <div className="flex items-center gap-6 text-sm text-gray-400">
+                {profile.phone && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-600">📞</span>
+                    <span>{formatPhone(profile.phone)}</span>
+                  </div>
+                )}
+                {profile.email && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-600">✉️</span>
+                    <span className="truncate max-w-xs">{profile.email}</span>
+                  </div>
+                )}
+                {!profile.phone && !profile.email && (
+                  <span className="text-gray-600 italic text-xs">Sem informações de contato</span>
+                )}
+              </div>
+            </div>
+
+            {/* Ações */}
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setIsEditingProfile(true)}>
+                ✏️ Editar
+              </Button>
+              <Button variant="primary" size="sm" onClick={handleAddNewDocument}>
+                + Documento
+              </Button>
+              
+              {/* Menu de ações */}
+              <div className="relative">
+                {!deleteConfirm ? (
+                  <button
+                    onClick={() => setDeleteConfirm(true)}
+                    className="px-3 py-2 text-gray-500 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                    </svg>
+                  </button>
+                ) : (
+                  <div className="absolute right-0 top-full mt-2 bg-gray-900 border border-gray-800 rounded-xl shadow-xl p-3 w-64 z-10 animate-in slide-in-from-top-2">
+                    <p className="text-xs text-red-400 font-bold mb-3">⚠️ Confirmar exclusão?</p>
+                    <div className="flex gap-2">
+                      <Button variant="ghost" className="flex-1 bg-red-600/20 text-red-400 hover:bg-red-600/30 text-xs" onClick={handleDeleteProfile}>
+                        Excluir
+                      </Button>
+                      <Button variant="ghost" className="text-xs" onClick={() => setDeleteConfirm(false)}>
+                        Cancelar
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
-        {!isEditing ? (
-          <Button onClick={() => setIsEditing(true)}>
-            ✏️ Editar Perfil
-          </Button>
-        ) : (
-          <div className="flex gap-2">
-            <Button variant="primary" onClick={handleSaveProfile}>
-              💾 Salvar
-            </Button>
-            <Button variant="ghost" onClick={() => {
-              setIsEditing(false);
-              setEditedProfile(profile);
-            }}>
-              Cancelar
-            </Button>
-          </div>
-        )}
       </div>
 
-      {/* Success Message */}
-      {successMessage && (
-        <div className="p-4 bg-green-600/10 rounded-xl border border-green-600/20 text-green-400 text-sm animate-in slide-in-from-top-2">
-          ✓ {successMessage}
-        </div>
-      )}
-
-      {/* Informações do Perfil */}
-      <Card>
-        <h2 className="text-xl font-black mb-4">Informações Pessoais</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Input
-            label="Nome Completo"
-            value={isEditing ? editedProfile.fullName : profile.fullName}
-            onChange={e => setEditedProfile({ ...editedProfile, fullName: e.target.value })}
-            disabled={!isEditing}
-          />
-          <Input
-            label="Apelido"
-            value={isEditing ? (editedProfile.nickname || '') : (profile.nickname || '')}
-            onChange={e => setEditedProfile({ ...editedProfile, nickname: e.target.value })}
-            disabled={!isEditing}
-          />
-          <Input
-            label="Email"
-            type="email"
-            value={isEditing ? (editedProfile.email || '') : (profile.email || '')}
-            onChange={e => setEditedProfile({ ...editedProfile, email: e.target.value })}
-            disabled={!isEditing}
-          />
-          <Input
-            label="Telefone"
-            value={isEditing ? (editedProfile.phone || '') : (profile.phone || '')}
-            onChange={e => setEditedProfile({ ...editedProfile, phone: e.target.value })}
-            disabled={!isEditing}
-          />
-          <Input
-            label="Data de Nascimento"
-            type="date"
-            value={isEditing ? (editedProfile.birthDate || '') : (profile.birthDate || '')}
-            onChange={e => setEditedProfile({ ...editedProfile, birthDate: e.target.value })}
-            disabled={!isEditing}
-          />
-          <div className="flex items-center gap-3 p-4 bg-gray-900 rounded-xl border border-gray-800">
-            <input
-              type="checkbox"
-              checked={isEditing ? (editedProfile.canDrive || false) : (profile.canDrive || false)}
-              onChange={e => setEditedProfile({ ...editedProfile, canDrive: e.target.checked })}
-              disabled={!isEditing}
-              className="w-5 h-5 accent-indigo-500"
-            />
-            <label className="text-sm text-gray-300">Pode dirigir</label>
-          </div>
-        </div>
-        <div className="mt-4">
-          <Input
-            as="textarea"
-            label="Observações"
-            rows={3}
-            value={isEditing ? (editedProfile.notes || '') : (profile.notes || '')}
-            onChange={e => setEditedProfile({ ...editedProfile, notes: e.target.value })}
-            disabled={!isEditing}
-            placeholder="Informações adicionais sobre o viajante"
-          />
-        </div>
-      </Card>
-
-      {/* Documentos */}
-      <Card>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-black">Documentos</h2>
-          <Button onClick={() => setShowDocTypeSelector(true)}>
-            + Adicionar Documento
-          </Button>
-        </div>
-
-        {documents.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            <p className="text-4xl mb-2">📄</p>
-            <p>Nenhum documento cadastrado</p>
-            <p className="text-sm mt-1">Adicione documentos para reutilizar em todas as viagens</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {documents.map(doc => (
-              <button
-                key={doc.id}
-                onClick={() => setSelectedDocument(doc)}
-                className="p-4 bg-gray-900 hover:bg-gray-800 rounded-xl border border-gray-800 hover:border-gray-700 transition-all text-left"
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <span className="text-3xl">{DOC_ICONS[doc.docType]}</span>
-                  {doc.isPrimary && (
-                    <Badge color="yellow" size="sm">Principal</Badge>
-                  )}
-                </div>
-                <p className="font-bold text-white mb-1">{doc.docType}</p>
-                {doc.docNumberLast4 && (
-                  <p className="text-sm text-gray-400 font-mono">
-                    •••• {doc.docNumberLast4}
-                  </p>
-                )}
-                {doc.docExpiry && (
-                  <p className="text-xs text-gray-500 mt-2">
-                    Validade: {formatSupabaseDate(doc.docExpiry)}
-                  </p>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-      </Card>
-
-      {/* Modal de seleção de tipo de documento */}
-      {showDocTypeSelector && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
-          onClick={() => setShowDocTypeSelector(false)}
-        >
-          <div 
-            className="bg-gray-900 border border-gray-800 rounded-2xl p-6 max-w-2xl w-full"
-            onClick={e => e.stopPropagation()}
-          >
-            <h3 className="text-xl font-black mb-4">Selecione o tipo de documento</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {['Passaporte', 'RG', 'CPF', 'CNH', 'Visto', 'ESTA', 'Outro'].map(type => (
-                <button
-                  key={type}
-                  onClick={() => handleAddDocument(type)}
-                  className="p-4 bg-gray-950 hover:bg-gray-800 rounded-xl border border-gray-800 hover:border-indigo-500 transition-all"
-                >
-                  <div className="text-3xl mb-2">{DOC_ICONS[type]}</div>
-                  <div className="text-sm font-bold text-white">{type}</div>
-                </button>
+      {/* Layout - Apenas área de documentos (full width) */}
+      <div className="max-w-[1600px] mx-auto px-8 py-6">
+        {/* Pendências (se houver) */}
+        {issues.length > 0 && (
+          <div className="mb-6 p-4 bg-amber-600/10 rounded-xl border border-amber-600/20">
+            <p className="text-xs font-black text-amber-500 uppercase mb-3">⚠️ {issues.length} Pendência{issues.length > 1 ? 's' : ''}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+              {issues.map((issue, idx) => (
+                <p key={idx} className="text-xs text-amber-400 leading-tight">• {issue.message}</p>
               ))}
             </div>
-            <div className="mt-4">
-              <Button variant="ghost" onClick={() => setShowDocTypeSelector(false)} className="w-full">
-                Cancelar
-              </Button>
-            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Document Drawer */}
+        {/* ÁREA DE DOCUMENTOS - div simples para ocupar largura total */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+            {/* Header compacto - sem botão duplicado */}
+            <div className="mb-4">
+              <h2 className="text-lg font-black text-white uppercase mb-3">Documentos</h2>
+
+              {/* Filtros compactos */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <Input
+                  as="select"
+                  value={categoryFilter}
+                  onChange={e => setCategoryFilter(e.target.value as any)}
+                  className="text-xs"
+                >
+                  <option value="all">Todas Categorias</option>
+                  <option value="identity">Identidade</option>
+                  <option value="entry">Entrada no País</option>
+                </Input>
+
+                <Input
+                  as="select"
+                  value={typeFilter}
+                  onChange={e => setTypeFilter(e.target.value)}
+                  className="text-xs"
+                >
+                  <option value="all">Todos os Tipos</option>
+                  <option value="Passaporte">Passaporte</option>
+                  <option value="RG">RG</option>
+                  <option value="CPF">CPF</option>
+                  <option value="CNH">CNH</option>
+                  <option value="Visto">Visto</option>
+                  <option value="ESTA">ESTA/ETA</option>
+                  <option value="Outro">Outros</option>
+                </Input>
+
+                <Input
+                  placeholder="Buscar..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="text-xs"
+                />
+              </div>
+            </div>
+
+            {/* Tabela de documentos */}
+            {filteredDocuments.length === 0 ? (
+              <div className="py-16 text-center">
+                <p className="text-sm text-gray-600 italic mb-3">Nenhum documento encontrado</p>
+                <Button variant="outline" size="sm" onClick={handleAddNewDocument}>
+                  + Adicionar primeiro documento
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Passaportes */}
+                {groupedDocs.passports.length > 0 && (
+                  <DocumentSection
+                    title="🛂 Passaportes"
+                    count={groupedDocs.passports.length}
+                    documents={groupedDocs.passports}
+                    onEdit={(doc) => {
+                      setSelectedDocument(doc);
+                      setIsAddingDocument(false);
+                    }}
+                  />
+                )}
+
+                {/* Identidade */}
+                {groupedDocs.identity.length > 0 && (
+                  <DocumentSection
+                    title="🪪 Identidade"
+                    count={groupedDocs.identity.length}
+                    documents={groupedDocs.identity}
+                    onEdit={(doc) => {
+                      setSelectedDocument(doc);
+                      setIsAddingDocument(false);
+                    }}
+                  />
+                )}
+
+                {/* Entrada */}
+                {groupedDocs.entry.length > 0 && (
+                  <DocumentSection
+                    title="🌍 Entrada no País"
+                    count={groupedDocs.entry.length}
+                    documents={groupedDocs.entry}
+                    onEdit={(doc) => {
+                      setSelectedDocument(doc);
+                      setIsAddingDocument(false);
+                    }}
+                  />
+                )}
+
+                {/* Outros */}
+                {groupedDocs.others.length > 0 && (
+                  <DocumentSection
+                    title="📋 Outros"
+                    count={groupedDocs.others.length}
+                    documents={groupedDocs.others}
+                    onEdit={(doc) => {
+                      setSelectedDocument(doc);
+                      setIsAddingDocument(false);
+                    }}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+      </div>
+
+      {/* Modais */}
+      <Modal isOpen={isEditingProfile} onClose={() => setIsEditingProfile(false)} title="Editar Perfil" size="xl">
+        <TravelerWizard
+          existingProfileId={profile.id}
+          onCancel={() => setIsEditingProfile(false)}
+          onDone={async (savedProfileId) => {
+            setIsEditingProfile(false);
+            await loadProfileData();
+            onRefresh();
+          }}
+        />
+      </Modal>
+
+      <Modal isOpen={showDocTypeSelector} onClose={() => setShowDocTypeSelector(false)} title="Selecione o tipo de documento" size="lg">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {[
+            { type: 'Passaporte', icon: '🛂', desc: 'Documento internacional', color: 'indigo' },
+            { type: 'RG', icon: '🪪', desc: 'Registro Geral', color: 'blue' },
+            { type: 'CPF', icon: '📄', desc: 'Cadastro de Pessoa Física', color: 'green' },
+            { type: 'CNH', icon: '🚗', desc: 'Carteira de Habilitação', color: 'purple' },
+            { type: 'Visto', icon: '🌍', desc: 'Autorização de entrada', color: 'yellow' },
+            { type: 'ESTA', icon: '✈️', desc: 'Autorização eletrônica', color: 'cyan' },
+            { type: 'Outro', icon: '📋', desc: 'Documento customizado', color: 'gray' }
+          ].map(({ type, icon, desc, color }) => (
+            <button
+              key={type}
+              onClick={() => handleSelectDocType(type)}
+              className="group relative p-6 bg-gray-950 hover:bg-gray-900 border border-gray-800 hover:border-indigo-500 rounded-xl transition-all text-left overflow-hidden"
+            >
+              {/* Efeito de brilho no hover */}
+              <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/0 via-indigo-600/0 to-indigo-600/0 group-hover:from-indigo-600/5 group-hover:via-indigo-600/10 group-hover:to-indigo-600/5 transition-all duration-300" />
+              
+              <div className="relative">
+                <div className="text-4xl mb-3 transform group-hover:scale-110 transition-transform duration-200">{icon}</div>
+                <p className="font-black text-white text-lg mb-1">{type}</p>
+                <p className="text-xs text-gray-500 leading-tight">{desc}</p>
+              </div>
+              
+              {/* Indicador de hover */}
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-600 to-purple-600 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300" />
+            </button>
+          ))}
+        </div>
+      </Modal>
+
       {selectedDocument && (
         <DocumentDrawer
           document={selectedDocument}
-          passports={passports}
+          passports={documents.filter(d => d.docType === 'Passaporte')}
           onClose={() => {
             setSelectedDocument(null);
             setIsAddingDocument(false);
           }}
           onSave={handleSaveDocument}
           onDelete={handleDeleteDocument}
-          onUpdateNumber={handleUpdateDocNumber}
+          onUpdateNumber={handleUpdateDocumentNumber}
           isNewDocument={isAddingDocument}
         />
+      )}
+    </div>
+  );
+};
+
+// Componente de linha de documento
+const DocumentRow: React.FC<{ doc: any; onEdit: () => void }> = ({ doc, onEdit }) => {
+  const getExpiryStatus = () => {
+    if (!doc.expiryDate) return null;
+    
+    const today = new Date();
+    const expiry = new Date(doc.expiryDate);
+    const daysUntil = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (daysUntil < 0) return { color: 'red', label: 'Vencido' };
+    if (daysUntil <= 30) return { color: 'red', label: `${daysUntil}d` };
+    if (daysUntil <= 90) return { color: 'yellow', label: `${daysUntil}d` };
+    return { color: 'green', label: 'OK' };
+  };
+
+  const status = getExpiryStatus();
+  const location = doc.issuerCountry || doc.issuerState || doc.regionOrCountry || '—';
+  const details = doc.visaCategory || doc.licenseCategory || doc.customLabel || '—';
+
+  return (
+    <button
+      onClick={onEdit}
+      className="w-full p-4 bg-gray-950 hover:bg-gray-900 rounded-xl border border-gray-800 hover:border-indigo-500 transition-all text-left"
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4 flex-1">
+          <div className="text-2xl">{DOC_ICONS[doc.docType] || '📄'}</div>
+          
+          <div className="flex-1 grid grid-cols-5 gap-4 items-center">
+            <div>
+              <Badge color="indigo">{doc.docType}</Badge>
+              {doc.isPrimary && <Badge color="green" className="ml-1 text-[8px]">PRINCIPAL</Badge>}
+            </div>
+            
+            <div>
+              <p className="text-xs text-gray-500">Local</p>
+              <p className="text-sm font-medium text-white">{location}</p>
+            </div>
+            
+            <div>
+              <p className="text-xs text-gray-500">Detalhes</p>
+              <p className="text-sm font-medium text-white truncate">{details}</p>
+            </div>
+            
+            <div>
+              <p className="text-xs text-gray-500">Vencimento</p>
+              <p className="text-sm font-medium text-white">{doc.expiryDate ? formatSupabaseDate(doc.expiryDate) : '—'}</p>
+            </div>
+            
+            <div className="text-right">
+              {status && (
+                <Badge color={status.color as any}>{status.label}</Badge>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+      </div>
+    </button>
+  );
+};
+
+// Componente de seção de documentos com tabela premium refinada
+const DocumentSection: React.FC<{ 
+  title: string; 
+  count: number; 
+  documents: any[]; 
+  onEdit: (doc: any) => void;
+}> = ({ title, count, documents, onEdit }) => {
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
+  const getExpiryStatus = (expiryDate: string | null) => {
+    if (!expiryDate) return null;
+    
+    const today = new Date();
+    const expiry = new Date(expiryDate);
+    const daysUntil = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (daysUntil < 0) return { 
+      color: 'bg-red-600/20 text-red-400 border-red-600/30', 
+      textColor: 'text-red-400',
+      label: 'Vencido'
+    };
+    if (daysUntil <= 30) return { 
+      color: 'bg-red-600/20 text-red-400 border-red-600/30', 
+      textColor: 'text-red-400',
+      label: `Vence em ${daysUntil}d`
+    };
+    if (daysUntil <= 90) return { 
+      color: 'bg-yellow-600/20 text-yellow-400 border-yellow-600/30', 
+      textColor: 'text-yellow-400',
+      label: `Vence em ${daysUntil}d`
+    };
+    return null; // OK - não mostra nada
+  };
+
+  const getIssuer = (doc: any) => {
+    return doc.issuerCountry || doc.issuerState || doc.regionOrCountry || '—';
+  };
+
+  const getSubtext = (doc: any) => {
+    if (doc.docType === 'Visto' && doc.visaCategory) return doc.visaCategory;
+    if (doc.docType === 'CNH' && doc.licenseCategory) return `Cat. ${doc.licenseCategory}`;
+    if (doc.docType === 'RG' && (doc.issuerAgency || doc.issuerState)) {
+      const parts = [];
+      if (doc.issuerAgency) parts.push(doc.issuerAgency);
+      if (doc.issuerState) parts.push(doc.issuerState);
+      return parts.join('/');
+    }
+    if (doc.docType === 'Outro' && doc.customLabel) return doc.customLabel;
+    if (doc.docType === 'Visto' && doc.entryType) return doc.entryType === 'multiple' ? 'Múltiplas' : 'Única';
+    return null;
+  };
+
+  // Contar alertas (documentos vencidos ou vencendo)
+  const alertCount = documents.filter(doc => {
+    const status = getExpiryStatus(doc.expiryDate);
+    return status !== null;
+  }).length;
+
+  return (
+    <div className="border border-gray-800 rounded-xl overflow-hidden">
+      {/* Header premium colapsável */}
+      <button
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        className="w-full px-5 py-3 bg-gray-900/50 flex items-center justify-between hover:bg-gray-900 transition-all group"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-black text-gray-300 uppercase tracking-wide">{title}</span>
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <span>{count} {count === 1 ? 'item' : 'itens'}</span>
+            {alertCount > 0 && (
+              <>
+                <span>•</span>
+                <span className="text-amber-400 font-bold">{alertCount} {alertCount === 1 ? 'alerta' : 'alertas'}</span>
+              </>
+            )}
+          </div>
+        </div>
+        <svg 
+          className={`w-4 h-4 text-gray-600 transition-transform duration-200 ${isCollapsed ? '' : 'rotate-180'}`} 
+          fill="none" 
+          viewBox="0 0 24 24" 
+          stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {/* Tabela - apenas 4 colunas: TIPO | EMISSOR | NÚMERO | VALIDADE */}
+      {!isCollapsed && (
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-900/30 border-b border-gray-800">
+              <tr>
+                <th className="px-5 py-2.5 text-left text-[10px] font-black text-gray-500 uppercase tracking-wider">Tipo</th>
+                <th className="px-5 py-2.5 text-left text-[10px] font-black text-gray-500 uppercase tracking-wider">Emissor</th>
+                <th className="px-5 py-2.5 text-left text-[10px] font-black text-gray-500 uppercase tracking-wider">Número</th>
+                <th className="px-5 py-2.5 text-left text-[10px] font-black text-gray-500 uppercase tracking-wider">Validade</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-800">
+              {documents.map(doc => {
+                const status = getExpiryStatus(doc.expiryDate);
+                const issuer = getIssuer(doc);
+                const subtext = getSubtext(doc);
+
+                return (
+                  <tr 
+                    key={doc.id} 
+                    onClick={() => onEdit(doc)}
+                    className="hover:bg-gray-900/40 transition-colors cursor-pointer group"
+                  >
+                    {/* TIPO */}
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-xl">{DOC_ICONS[doc.docType] || '📄'}</span>
+                        <div>
+                          <p className="text-sm font-bold text-white">{doc.docType}</p>
+                          {subtext && <p className="text-[10px] text-gray-500 mt-0.5">{subtext}</p>}
+                          {doc.isPrimary && (
+                            <span className="inline-block mt-1 text-[8px] px-1.5 py-0.5 bg-emerald-600/20 text-emerald-400 rounded uppercase font-bold border border-emerald-600/30">
+                              Principal
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* EMISSOR */}
+                    <td className="px-5 py-3.5">
+                      <p className="text-sm text-gray-300">{issuer}</p>
+                    </td>
+
+                    {/* NÚMERO */}
+                    <td className="px-5 py-3.5">
+                      <p className="text-sm font-mono text-white">{formatDocNumber(doc.docNumber, doc.docType)}</p>
+                    </td>
+
+                    {/* VALIDADE */}
+                    <td className="px-5 py-3.5">
+                      {doc.expiryDate ? (
+                        <div className="flex items-center gap-2">
+                          <p className={`text-sm ${status ? status.textColor : 'text-gray-300'}`}>
+                            {formatSupabaseDate(doc.expiryDate)}
+                          </p>
+                          {status && (
+                            <span className={`inline-block text-[10px] px-2 py-0.5 rounded uppercase font-bold border ${status.color}`}>
+                              {status.label}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-600 italic">Sem validade</p>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

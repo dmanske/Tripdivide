@@ -1,4 +1,4 @@
-import { supabase, supabaseUrl } from './supabase';
+import { supabase } from './supabase';
 import { Trip, Quote, Expense, Payment, Vendor, Traveler, ExpenseSplit, Reimbursement, Couple } from '../types';
 
 export const supabaseDataProvider = {
@@ -512,7 +512,7 @@ export const supabaseDataProvider = {
       (data || []).map(async (d) => {
         try {
           // Descriptografar via Edge Function
-          const response = await fetch(`${supabaseUrl}/functions/v1/encrypt-document`, {
+          const response = await fetch(`${supabase.supabaseUrl}/functions/v1/encrypt-document`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${session.access_token}`,
@@ -598,7 +598,7 @@ export const supabaseDataProvider = {
       docNumber: doc.docNumber ? '***' + doc.docNumber.slice(-4) : 'vazio'
     });
 
-    const response = await fetch(`${supabaseUrl}/functions/v1/encrypt-document`, {
+    const response = await fetch(`${supabase.supabaseUrl}/functions/v1/encrypt-document`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${session.access_token}`,
@@ -631,10 +631,14 @@ export const supabaseDataProvider = {
 
     const result = await response.json();
     
+    console.log('📥 Resposta da Edge Function:', result);
+    
     if (!result.success) {
       console.error('❌ Erro ao salvar documento:', result.error);
       throw new Error(result.error || 'Erro ao salvar documento');
     }
+
+    console.log('✅ Documento salvo com sucesso! ID:', result.documentId);
 
     // Retornar com número completo (mantido em memória no frontend)
     return {
@@ -668,7 +672,7 @@ export const supabaseDataProvider = {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error('Não autenticado');
 
-    const response = await fetch(`${supabaseUrl}/functions/v1/encrypt-document`, {
+    const response = await fetch(`${supabase.supabaseUrl}/functions/v1/encrypt-document`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${session.access_token}`,
@@ -936,21 +940,11 @@ export const supabaseDataProvider = {
   saveQuote: async (quote: Partial<Quote>) => {
     const { data: { user } } = await supabase.auth.getUser();
     
-    // Validação: deve ter vendor_profile_id OU (source_type + source_value)
-    const hasVendor = !!quote.vendor_profile_id;
-    const hasSource = !!(quote.source_type && quote.source_value);
-    
-    if (!hasVendor && !hasSource) {
-      throw new Error('Quote deve ter um fornecedor OU uma fonte informada');
-    }
-    
     if (quote.id) {
       const { data, error } = await supabase
         .from('td_quotes')
         .update({
-          vendor_profile_id: quote.vendor_profile_id || null,
-          source_type: quote.source_type || null,
-          source_value: quote.source_value || null,
+          vendor_id: quote.vendorId,
           segment_id: quote.segmentId,
           title: quote.title,
           category: quote.category,
@@ -990,9 +984,7 @@ export const supabaseDataProvider = {
         .from('td_quotes')
         .insert({
           trip_id: quote.tripId,
-          vendor_profile_id: quote.vendor_profile_id || null,
-          source_type: quote.source_type || null,
-          source_value: quote.source_value || null,
+          vendor_id: quote.vendorId,
           segment_id: quote.segmentId,
           title: quote.title,
           category: quote.category,
@@ -1054,14 +1046,6 @@ export const supabaseDataProvider = {
   },
 
   saveExpense: async (expense: Partial<Expense>) => {
-    // Validação: deve ter vendor_profile_id OU (source_type + source_value)
-    const hasVendor = !!expense.vendor_profile_id;
-    const hasSource = !!(expense.source_type && expense.source_value);
-    
-    if (!hasVendor && !hasSource) {
-      throw new Error('Expense deve ter um fornecedor OU uma fonte informada');
-    }
-    
     if (expense.id) {
       const { data, error } = await supabase
         .from('td_expenses')
@@ -1069,9 +1053,7 @@ export const supabaseDataProvider = {
           segment_id: expense.segmentId,
           category: expense.category,
           title: expense.title,
-          vendor_profile_id: expense.vendor_profile_id || null,
-          source_type: expense.source_type || null,
-          source_value: expense.source_value || null,
+          vendor_id: expense.vendorId,
           source_quote_id: expense.sourceQuoteId,
           currency: expense.currency,
           amount: expense.amount,
@@ -1101,9 +1083,7 @@ export const supabaseDataProvider = {
           segment_id: expense.segmentId,
           category: expense.category,
           title: expense.title,
-          vendor_profile_id: expense.vendor_profile_id || null,
-          source_type: expense.source_type || null,
-          source_value: expense.source_value || null,
+          vendor_id: expense.vendorId,
           source_quote_id: expense.sourceQuoteId,
           currency: expense.currency,
           amount: expense.amount,
@@ -1303,7 +1283,7 @@ export const supabaseDataProvider = {
 
     if (!couples) return null;
 
-    // Create expense - copiar vendor_profile_id e source se existirem
+    // Create expense
     const { data: expense, error: expenseError } = await supabase
       .from('td_expenses')
       .insert({
@@ -1311,9 +1291,7 @@ export const supabaseDataProvider = {
         segment_id: quote.segment_id || null,
         category: quote.category,
         title: quote.title,
-        vendor_profile_id: quote.vendor_profile_id || null,
-        source_type: quote.source_type || null,
-        source_value: quote.source_value || null,
+        vendor_id: quote.vendor_id,
         source_quote_id: quote.id,
         currency: quote.currency,
         amount: quote.total_amount,
@@ -1372,7 +1350,7 @@ export const supabaseDataProvider = {
       .from('td_quotes')
       .insert({
         trip_id: original.trip_id,
-        vendor_profile_id: original.vendor_profile_id,
+        vendor_id: original.vendor_id,
         segment_id: original.segment_id,
         title: original.title,
         category: original.category,
@@ -1483,7 +1461,7 @@ export const supabaseDataProvider = {
   },
 
   // ==================== VENDOR REQUESTS ====================
-  getVendorRequests: async (vendor_profile_id: string) => {
+  getVendorRequests: async (vendorId: string) => {
     // Criar tabela td_vendor_requests se necessário
     // Por enquanto retorna array vazio
     return [];
@@ -1515,17 +1493,61 @@ export const supabaseDataProvider = {
 
     const { data: { user } } = await supabase.auth.getUser();
 
+    // Verificar se vendor existe ou criar
+    let vendorId = null;
+    
+    if (block.vendorPhone) {
+      const { data: existingVendors } = await supabase
+        .from('td_vendors')
+        .select('id, contacts')
+        .eq('trip_id', tripId)
+        .eq('status', 'Ativo');
+
+      const vendor = existingVendors?.find(v => 
+        v.contacts?.some((c: any) => c.phone === block.vendorPhone)
+      );
+
+      if (vendor) {
+        vendorId = vendor.id;
+      } else {
+        // Criar novo vendor
+        const { data: newVendor } = await supabase
+          .from('td_vendors')
+          .insert({
+            trip_id: tripId,
+            name: `Fornecedor ${block.vendorPhone}`,
+            categories: [block.category || 'Diversos'],
+            rating: 3,
+            preferred: false,
+            tags: ['Importado WhatsApp'],
+            risk_flags: [],
+            status: 'Ativo',
+            contacts: [{
+              id: 'c1',
+              name: 'WhatsApp',
+              role: 'Vendas',
+              phone: block.vendorPhone,
+              preferredMethod: 'WhatsApp',
+              isPrimary: true
+            }]
+          })
+          .select()
+          .single();
+
+        vendorId = newVendor?.id;
+      }
+    }
+
     // Calcular taxa de câmbio
     const rate = block.currency === 'BRL' ? 1 : (block.exchangeRate || 5.2);
     const amountBrl = block.totalAmount * rate;
 
-    // Criar quote sem fornecedor (fonte: WhatsApp)
+    // Criar quote
     const { data: quote, error } = await supabase
       .from('td_quotes')
       .insert({
         trip_id: tripId,
-        source_type: 'texto',
-        source_value: block.rawText || `WhatsApp: ${block.vendorPhone || 'Desconhecido'}`,
+        vendor_id: vendorId,
         title: block.suggestedQuote?.title || `Orçamento ${block.category}`,
         category: block.category || 'Diversos',
         provider: block.suggestedQuote?.provider || `Fornecedor ${block.vendorPhone}`,
@@ -1630,376 +1652,5 @@ export const supabaseDataProvider = {
         .from('td_reimbursements')
         .insert(reimbursements);
     }
-  },
-
-  // ==================== TRAVELER PROFILES (GLOBAL) ====================
-  getTravelerProfiles: async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return [];
-
-    const { data, error } = await supabase
-      .from('td_traveler_profiles')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    return data || [];
-  },
-
-  getTravelerProfileById: async (profileId: string) => {
-    const { data, error } = await supabase
-      .from('td_traveler_profiles')
-      .select('*')
-      .eq('id', profileId)
-      .single();
-
-    if (error) throw error;
-    return data;
-  },
-
-  saveTravelerProfile: async (profile: any) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Usuário não autenticado');
-
-    if (profile.id) {
-      // Update
-      const { data, error } = await supabase
-        .from('td_traveler_profiles')
-        .update({
-          full_name: profile.fullName,
-          nickname: profile.nickname,
-          phone: profile.phone,
-          email: profile.email,
-          birth_date: profile.birthDate,
-          can_drive: profile.canDrive,
-          primary_doc_type: profile.primaryDocType,
-          primary_doc_number: profile.primaryDocNumber,
-          primary_doc_expiry: profile.primaryDocExpiry,
-          notes: profile.notes,
-          tags: profile.tags,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', profile.id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    } else {
-      // Insert
-      const { data, error } = await supabase
-        .from('td_traveler_profiles')
-        .insert({
-          user_id: user.id,
-          full_name: profile.fullName,
-          nickname: profile.nickname,
-          phone: profile.phone,
-          email: profile.email,
-          birth_date: profile.birthDate,
-          can_drive: profile.canDrive,
-          primary_doc_type: profile.primaryDocType,
-          primary_doc_number: profile.primaryDocNumber,
-          primary_doc_expiry: profile.primaryDocExpiry,
-          notes: profile.notes,
-          tags: profile.tags || []
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    }
-  },
-
-  deleteTravelerProfile: async (profileId: string) => {
-    // Verificar se há vínculos com viagens
-    const { data: links } = await supabase
-      .from('td_trip_travelers')
-      .select('id')
-      .eq('traveler_profile_id', profileId)
-      .limit(1);
-
-    if (links && links.length > 0) {
-      throw new Error('Não é possível excluir um perfil que está vinculado a viagens. Remova os vínculos primeiro.');
-    }
-
-    const { error } = await supabase
-      .from('td_traveler_profiles')
-      .delete()
-      .eq('id', profileId);
-
-    if (error) throw error;
-  },
-
-  // ==================== TRAVELER PROFILE DOCUMENTS ====================
-  getTravelerProfileDocuments: async (profileId: string) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw new Error('Não autenticado');
-
-    const { data, error } = await supabase
-      .from('td_traveler_profile_documents')
-      .select('*')
-      .eq('traveler_profile_id', profileId)
-      .order('created_at', { ascending: true});
-
-    if (error) throw error;
-    
-    // Descriptografar todos os documentos
-    const documentsWithDecrypted = await Promise.all(
-      (data || []).map(async (d) => {
-        try {
-          // Descriptografar via Edge Function
-          const response = await fetch(`${supabaseUrl}/functions/v1/encrypt-document`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${session.access_token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              action: 'decrypt',
-              documentId: d.id,
-              isProfileDocument: true
-            })
-          });
-
-          const result = await response.json();
-          const docNumber = result.success ? result.docNumber : ('••••' + d.doc_number_last4);
-
-          return {
-            id: d.id,
-            travelerProfileId: d.traveler_profile_id,
-            docType: d.doc_type,
-            docCategory: d.doc_category,
-            docNumber: docNumber,
-            docNumberLast4: d.doc_number_last4,
-            docExpiry: d.doc_expiry,
-            issueDate: d.issue_date,
-            issuingCountry: d.issuing_country,
-            issuerState: d.issuer_state,
-            issuerAgency: d.issuer_agency,
-            isPrimary: d.is_primary,
-            notes: d.notes,
-            createdAt: d.created_at,
-            updatedAt: d.updated_at
-          };
-        } catch (err) {
-          return {
-            id: d.id,
-            travelerProfileId: d.traveler_profile_id,
-            docType: d.doc_type,
-            docCategory: d.doc_category,
-            docNumber: '••••' + d.doc_number_last4,
-            docNumberLast4: d.doc_number_last4,
-            docExpiry: d.doc_expiry,
-            issueDate: d.issue_date,
-            issuingCountry: d.issuing_country,
-            issuerState: d.issuer_state,
-            issuerAgency: d.issuer_agency,
-            isPrimary: d.is_primary,
-            notes: d.notes,
-            createdAt: d.created_at,
-            updatedAt: d.updated_at
-          };
-        }
-      })
-    );
-
-    return documentsWithDecrypted;
-  },
-
-  saveTravelerProfileDocument: async (doc: any) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw new Error('Não autenticado');
-
-    const response = await fetch(`${supabaseUrl}/functions/v1/encrypt-document`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        action: 'encrypt',
-        isProfileDocument: true,
-        travelerProfileId: doc.travelerProfileId,
-        docType: doc.docType,
-        docCategory: doc.docCategory || (doc.docType === 'Visto' || doc.docType === 'ESTA' ? 'entry' : 'identity'),
-        docNumber: doc.docNumber,
-        issuerCountry: doc.issuerCountry || doc.issuingCountry || null,
-        issuerState: doc.issuerState || null,
-        issuerAgency: doc.issuerAgency || null,
-        issuerPlace: doc.issuerPlace || null,
-        regionOrCountry: doc.regionOrCountry || null,
-        issueDate: doc.issueDate || null,
-        expiryDate: doc.expiryDate || doc.docExpiry || null,
-        visaCategory: doc.visaCategory || null,
-        entryType: doc.entryType || null,
-        stayDurationDays: doc.stayDurationDays || null,
-        licenseCategory: doc.licenseCategory || null,
-        customLabel: doc.customLabel || null,
-        passportDocumentId: doc.passportDocumentId || null,
-        isPrimary: doc.isPrimary || false,
-        notes: doc.notes || null,
-        documentId: doc.id || null
-      })
-    });
-    
-    const result = await response.json();
-    
-    if (!response.ok || !result.success) {
-      throw new Error(result.error || 'Erro ao salvar documento');
-    }
-
-    return result.documentId;
-  },
-
-  deleteTravelerProfileDocument: async (documentId: string) => {
-    const { error } = await supabase
-      .from('td_traveler_profile_documents')
-      .delete()
-      .eq('id', documentId);
-
-    if (error) throw error;
-  },
-
-  // ==================== TRIP TRAVELERS (LINK) ====================
-  getTripTravelers: async (tripId: string) => {
-    const { data, error } = await supabase
-      .from('td_trip_travelers')
-      .select(`
-        *,
-        profile:td_traveler_profiles(*)
-      `)
-      .eq('trip_id', tripId)
-      .eq('status', 'Ativo')
-      .order('created_at', { ascending: true });
-
-    if (error) throw error;
-    return data || [];
-  },
-
-  linkTravelerToTrip: async (link: any) => {
-    const { data, error } = await supabase
-      .from('td_trip_travelers')
-      .insert({
-        trip_id: link.tripId,
-        traveler_profile_id: link.travelerProfileId,
-        couple_id: link.coupleId,
-        type: link.type,
-        is_payer: link.isPayer,
-        goes_to_segments: link.goesToSegments,
-        status: 'Ativo',
-        count_in_split: link.countInSplit !== undefined ? link.countInSplit : true
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
-  },
-
-  updateTripTraveler: async (linkId: string, updates: any) => {
-    const { data, error } = await supabase
-      .from('td_trip_travelers')
-      .update({
-        couple_id: updates.coupleId,
-        type: updates.type,
-        is_payer: updates.isPayer,
-        goes_to_segments: updates.goesToSegments,
-        count_in_split: updates.countInSplit,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', linkId)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
-  },
-
-  unlinkTravelerFromTrip: async (linkId: string) => {
-    const { error } = await supabase
-      .from('td_trip_travelers')
-      .update({ status: 'Arquivado' })
-      .eq('id', linkId);
-
-    if (error) throw error;
-  },
-
-  // ==================== VENDOR PROFILES (GLOBAL) ====================
-  getVendorProfiles: async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return [];
-
-    const { data, error } = await supabase
-      .from('td_vendor_profiles')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('name', { ascending: true });
-
-    if (error) throw error;
-    return data || [];
-  },
-
-  getVendorProfileById: async (profileId: string) => {
-    const { data, error } = await supabase
-      .from('td_vendor_profiles')
-      .select('*')
-      .eq('id', profileId)
-      .single();
-
-    if (error) throw error;
-    return data;
-  },
-
-  saveVendorProfile: async (profile: any) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Usuário não autenticado');
-
-    const profileData = {
-      user_id: user.id,
-      name: profile.name,
-      legal_name: profile.legalName,
-      categories: profile.categories || [],
-      rating: profile.rating || 3,
-      tags: profile.tags || [],
-      risk_flags: profile.riskFlags || [],
-      contacts: profile.contacts || [],
-      website_url: profile.websiteUrl,
-      instagram_url: profile.instagramUrl,
-      payment_terms_default: profile.paymentTermsDefault,
-      cancellation_policy_notes: profile.cancellationPolicyNotes,
-      updated_at: new Date().toISOString()
-    };
-
-    if (profile.id) {
-      const { data, error } = await supabase
-        .from('td_vendor_profiles')
-        .update(profileData)
-        .eq('id', profile.id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    } else {
-      const { data, error } = await supabase
-        .from('td_vendor_profiles')
-        .insert({ ...profileData, created_at: new Date().toISOString() })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    }
-  },
-
-  deleteVendorProfile: async (profileId: string) => {
-    const { error } = await supabase
-      .from('td_vendor_profiles')
-      .delete()
-      .eq('id', profileId);
-
-    if (error) throw error;
   }
 };
