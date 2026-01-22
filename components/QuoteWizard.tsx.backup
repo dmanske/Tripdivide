@@ -1,25 +1,18 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Trip, Quote, QuoteStatus, Currency, PaymentMethod } from '../types';
+import { Trip, Quote, QuoteStatus, Currency, Vendor, PaymentMethod, QuoteTicketDetails, QuoteHotelDetails, QuoteCarDetails } from '../types';
 import { Card, Badge, Button, Input } from './CommonUI';
-import { supabaseDataProvider } from '../lib/supabaseDataProvider';
-import QuickCreateVendorModal from './QuickCreateVendorModal';
 
 interface QuoteWizardProps {
   trip: Trip;
+  vendors: Vendor[];
   initialData?: Partial<Quote>;
   onSave: (quote: Quote) => void;
   onCancel: () => void;
 }
 
-const QuoteWizard: React.FC<QuoteWizardProps> = ({ trip, initialData, onSave, onCancel }) => {
+const QuoteWizard: React.FC<QuoteWizardProps> = ({ trip, vendors, initialData, onSave, onCancel }) => {
   const [activeStep, setActiveStep] = useState(1);
-  const [tripVendors, setTripVendors] = useState<any[]>([]);
-  const [hasVendor, setHasVendor] = useState(!!initialData?.vendor_profile_id);
-  const [sourceType, setSourceType] = useState<'link' | 'texto' | 'manual'>(initialData?.source_type || 'link');
-  const [sourceValue, setSourceValue] = useState(initialData?.source_value || '');
-  const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
-  
   const [formData, setFormData] = useState<Partial<Quote>>({
     tripId: trip.id,
     currency: Currency.BRL,
@@ -37,26 +30,11 @@ const QuoteWizard: React.FC<QuoteWizardProps> = ({ trip, initialData, onSave, on
     ...initialData
   });
 
-  useEffect(() => {
-    loadTripVendors();
-  }, []);
-
-  const loadTripVendors = async () => {
-    try {
-      const vendors = await supabaseDataProvider.getTripVendors(trip.id);
-      setTripVendors(vendors);
-    } catch (error) {
-      console.error('Erro ao carregar fornecedores:', error);
-    }
-  };
-
   // Cálculo de Completude
   const completeness = useMemo(() => {
     const q = formData;
-    const hasVendorOrSource = q.vendor_profile_id || (q.source_type && q.source_value);
-    
     const rules: Record<string, boolean> = {
-      base: !!(q.title && q.category && hasVendorOrSource && q.totalAmount && q.validUntil && q.cancellationPolicy),
+      base: !!(q.title && q.category && q.vendorId && q.totalAmount && q.validUntil && q.cancellationPolicy),
       hotel: q.category === 'Hospedagem' ? !!(q.hotelDetails?.checkin && q.hotelDetails?.checkout) : true,
       ticket: q.category === 'Ingressos/Atrações' ? !!(q.ticketDetails?.kind) : true,
       car: q.category === 'Aluguel de Carro' ? !!(q.carDetails?.pickupDateTime) : true,
@@ -115,153 +93,13 @@ const QuoteWizard: React.FC<QuoteWizardProps> = ({ trip, initialData, onSave, on
               {trip.segments.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </Input>
           </div>
-
-          {/* Seleção de Fornecedor ou Fonte */}
-          <div className="space-y-3 p-4 bg-gray-950 rounded-xl border border-gray-800">
-            <label className="block text-sm font-bold text-gray-400 mb-3">Fornecedor</label>
-            
-            <label className="flex items-center gap-3 p-3 bg-gray-900 rounded-lg cursor-pointer hover:bg-gray-800 transition-colors">
-              <input 
-                type="radio" 
-                checked={hasVendor} 
-                onChange={() => {
-                  setHasVendor(true);
-                  setFormData({...formData, source_type: undefined, source_value: undefined});
-                }}
-                className="w-4 h-4"
-              />
-              <div>
-                <span className="text-sm font-bold text-white">Selecionar fornecedor vinculado</span>
-                <p className="text-xs text-gray-500">Escolher da lista de fornecedores desta viagem</p>
-              </div>
-            </label>
-            
-            {hasVendor && (
-              <div className="space-y-2 ml-7">
-                <select 
-                  value={formData.vendor_profile_id || ''} 
-                  onChange={e => {
-                    const tv = tripVendors.find(v => v.profile.id === e.target.value);
-                    setFormData({
-                      ...formData, 
-                      vendor_profile_id: e.target.value,
-                      provider: tv?.profile.name
-                    });
-                  }}
-                  className="w-full px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg text-white focus:border-indigo-600 focus:outline-none"
-                >
-                  <option value="">Selecione um fornecedor...</option>
-                  {tripVendors.map(tv => (
-                    <option key={tv.id} value={tv.profile.id}>
-                      {tv.profile.name}
-                    </option>
-                  ))}
-                </select>
-                
-                <Button 
-                  variant="outline" 
-                  onClick={() => setIsQuickCreateOpen(true)}
-                  className="w-full text-sm"
-                >
-                  + Criar novo fornecedor
-                </Button>
-              </div>
-            )}
-            
-            <label className="flex items-center gap-3 p-3 bg-gray-900 rounded-lg cursor-pointer hover:bg-gray-800 transition-colors">
-              <input 
-                type="radio" 
-                checked={!hasVendor} 
-                onChange={() => {
-                  setHasVendor(false);
-                  setFormData({...formData, vendor_profile_id: undefined, provider: undefined});
-                }}
-                className="w-4 h-4"
-              />
-              <div>
-                <span className="text-sm font-bold text-white">Sem fornecedor (informar fonte)</span>
-                <p className="text-xs text-gray-500">Para cotações de sites, pesquisas, etc</p>
-              </div>
-            </label>
-            
-            {!hasVendor && (
-              <div className="space-y-3 ml-7">
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => setSourceType('link')}
-                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold border transition-all ${
-                      sourceType === 'link' 
-                        ? 'bg-indigo-600 border-indigo-400 text-white' 
-                        : 'bg-gray-900 border-gray-800 text-gray-500'
-                    }`}
-                  >
-                    Link
-                  </button>
-                  <button 
-                    onClick={() => setSourceType('texto')}
-                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold border transition-all ${
-                      sourceType === 'texto' 
-                        ? 'bg-indigo-600 border-indigo-400 text-white' 
-                        : 'bg-gray-900 border-gray-800 text-gray-500'
-                    }`}
-                  >
-                    Texto
-                  </button>
-                  <button 
-                    onClick={() => setSourceType('manual')}
-                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold border transition-all ${
-                      sourceType === 'manual' 
-                        ? 'bg-indigo-600 border-indigo-400 text-white' 
-                        : 'bg-gray-900 border-gray-800 text-gray-500'
-                    }`}
-                  >
-                    Manual
-                  </button>
-                </div>
-                
-                {sourceType === 'link' && (
-                  <Input 
-                    label="URL da Fonte *" 
-                    value={sourceValue}
-                    onChange={e => {
-                      setSourceValue(e.target.value);
-                      setFormData({...formData, source_type: 'link', source_value: e.target.value});
-                    }}
-                    placeholder="https://exemplo.com/cotacao"
-                  />
-                )}
-                
-                {sourceType === 'texto' && (
-                  <div>
-                    <label className="block text-sm font-bold text-gray-400 mb-2">Texto da Cotação *</label>
-                    <textarea 
-                      placeholder="Cole aqui o texto da cotação (email, mensagem, etc)..."
-                      value={sourceValue}
-                      onChange={e => {
-                        setSourceValue(e.target.value);
-                        setFormData({...formData, source_type: 'texto', source_value: e.target.value});
-                      }}
-                      rows={4}
-                      className="w-full px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg text-white focus:border-indigo-600 focus:outline-none resize-none"
-                    />
-                  </div>
-                )}
-                
-                {sourceType === 'manual' && (
-                  <Input 
-                    label="Descrição da Fonte *"
-                    value={sourceValue}
-                    onChange={e => {
-                      setSourceValue(e.target.value);
-                      setFormData({...formData, source_type: 'manual', source_value: e.target.value});
-                    }}
-                    placeholder="Ex: Cotação por telefone, WhatsApp, pessoalmente"
-                  />
-                )}
-              </div>
-            )}
-          </div>
-
+          <Input as="select" label="Fornecedor *" value={formData.vendorId} onChange={e => {
+            const v = vendors.find(vend => vend.id === e.target.value);
+            setFormData({...formData, vendorId: e.target.value, provider: v?.name});
+          }}>
+            <option value="">Selecione um fornecedor...</option>
+            {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+          </Input>
           <div className="flex gap-2 items-end">
             <Input label="Link do Orçamento (URL)" className="flex-1" value={formData.linkUrl} onChange={e => setFormData({...formData, linkUrl: e.target.value})} />
             {formData.linkUrl && <Button variant="secondary" onClick={() => window.open(formData.linkUrl, '_blank')}>Abrir</Button>}
@@ -453,9 +291,7 @@ const QuoteWizard: React.FC<QuoteWizardProps> = ({ trip, initialData, onSave, on
              </div>
              <div>
                 <h3 className="text-lg font-bold text-white leading-tight">{formData.title || 'Sem título'}</h3>
-                <p className="text-xs text-gray-500 font-medium">
-                  {formData.provider || (formData.source_type ? `Fonte: ${formData.source_type}` : 'Sem fornecedor')}
-                </p>
+                <p className="text-xs text-gray-500 font-medium">{formData.provider || 'Sem fornecedor'}</p>
              </div>
              <div className="p-3 bg-gray-900 rounded-xl space-y-1">
                 <p className="text-[10px] text-gray-500 font-bold uppercase">Impacto Financeiro</p>
@@ -466,7 +302,7 @@ const QuoteWizard: React.FC<QuoteWizardProps> = ({ trip, initialData, onSave, on
              <div className="space-y-2 pt-4 border-t border-gray-800">
                 <p className="text-[10px] text-gray-500 font-bold uppercase">Checklist</p>
                 <ul className="space-y-1">
-                   <CheckItem label="Campos Básicos" checked={!!(formData.title && (formData.vendor_profile_id || (formData.source_type && formData.source_value)))} />
+                   <CheckItem label="Campos Básicos" checked={!!(formData.title && formData.vendorId)} />
                    <CheckItem label="Financeiro" checked={!!formData.totalAmount} />
                    <CheckItem label="Regras & Validade" checked={!!(formData.validUntil && formData.cancellationPolicy)} />
                    <CheckItem label="Participantes" checked={formData.participantIds && formData.participantIds.length > 0} />
@@ -475,28 +311,6 @@ const QuoteWizard: React.FC<QuoteWizardProps> = ({ trip, initialData, onSave, on
           </div>
         </Card>
       </div>
-
-      {/* Modal de criação rápida de fornecedor */}
-      {isQuickCreateOpen && (
-        <QuickCreateVendorModal
-          onClose={() => setIsQuickCreateOpen(false)}
-          onCreated={async (profileId) => {
-            // Vincular à viagem
-            await supabaseDataProvider.linkVendorToTrip(trip.id, profileId);
-            // Recarregar lista
-            await loadTripVendors();
-            // Selecionar automaticamente
-            const newVendors = await supabaseDataProvider.getVendorProfiles();
-            const profile = newVendors.find(v => v.id === profileId);
-            setFormData({
-              ...formData, 
-              vendor_profile_id: profileId,
-              provider: profile?.name
-            });
-            setIsQuickCreateOpen(false);
-          }}
-        />
-      )}
     </div>
   );
 };

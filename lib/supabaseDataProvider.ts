@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase, supabaseUrl } from './supabase';
 import { Trip, Quote, Expense, Payment, Vendor, Traveler, ExpenseSplit, Reimbursement, Couple } from '../types';
 
 export const supabaseDataProvider = {
@@ -512,7 +512,7 @@ export const supabaseDataProvider = {
       (data || []).map(async (d) => {
         try {
           // Descriptografar via Edge Function
-          const response = await fetch(`${supabase.supabaseUrl}/functions/v1/encrypt-document`, {
+          const response = await fetch(`${supabaseUrl}/functions/v1/encrypt-document`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${session.access_token}`,
@@ -598,7 +598,7 @@ export const supabaseDataProvider = {
       docNumber: doc.docNumber ? '***' + doc.docNumber.slice(-4) : 'vazio'
     });
 
-    const response = await fetch(`${supabase.supabaseUrl}/functions/v1/encrypt-document`, {
+    const response = await fetch(`${supabaseUrl}/functions/v1/encrypt-document`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${session.access_token}`,
@@ -672,7 +672,7 @@ export const supabaseDataProvider = {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error('Não autenticado');
 
-    const response = await fetch(`${supabase.supabaseUrl}/functions/v1/encrypt-document`, {
+    const response = await fetch(`${supabaseUrl}/functions/v1/encrypt-document`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${session.access_token}`,
@@ -940,11 +940,21 @@ export const supabaseDataProvider = {
   saveQuote: async (quote: Partial<Quote>) => {
     const { data: { user } } = await supabase.auth.getUser();
     
+    // Validação: deve ter vendor_profile_id OU (source_type + source_value)
+    const hasVendor = !!quote.vendor_profile_id;
+    const hasSource = !!(quote.source_type && quote.source_value);
+    
+    if (!hasVendor && !hasSource) {
+      throw new Error('Quote deve ter um fornecedor OU uma fonte informada');
+    }
+    
     if (quote.id) {
       const { data, error } = await supabase
         .from('td_quotes')
         .update({
-          vendor_id: quote.vendorId,
+          vendor_profile_id: quote.vendor_profile_id || null,
+          source_type: quote.source_type || null,
+          source_value: quote.source_value || null,
           segment_id: quote.segmentId,
           title: quote.title,
           category: quote.category,
@@ -984,7 +994,9 @@ export const supabaseDataProvider = {
         .from('td_quotes')
         .insert({
           trip_id: quote.tripId,
-          vendor_id: quote.vendorId,
+          vendor_profile_id: quote.vendor_profile_id || null,
+          source_type: quote.source_type || null,
+          source_value: quote.source_value || null,
           segment_id: quote.segmentId,
           title: quote.title,
           category: quote.category,
@@ -1046,6 +1058,14 @@ export const supabaseDataProvider = {
   },
 
   saveExpense: async (expense: Partial<Expense>) => {
+    // Validação: deve ter vendor_profile_id OU (source_type + source_value)
+    const hasVendor = !!expense.vendor_profile_id;
+    const hasSource = !!(expense.source_type && expense.source_value);
+    
+    if (!hasVendor && !hasSource) {
+      throw new Error('Expense deve ter um fornecedor OU uma fonte informada');
+    }
+    
     if (expense.id) {
       const { data, error } = await supabase
         .from('td_expenses')
@@ -1053,7 +1073,9 @@ export const supabaseDataProvider = {
           segment_id: expense.segmentId,
           category: expense.category,
           title: expense.title,
-          vendor_id: expense.vendorId,
+          vendor_profile_id: expense.vendor_profile_id || null,
+          source_type: expense.source_type || null,
+          source_value: expense.source_value || null,
           source_quote_id: expense.sourceQuoteId,
           currency: expense.currency,
           amount: expense.amount,
@@ -1083,7 +1105,9 @@ export const supabaseDataProvider = {
           segment_id: expense.segmentId,
           category: expense.category,
           title: expense.title,
-          vendor_id: expense.vendorId,
+          vendor_profile_id: expense.vendor_profile_id || null,
+          source_type: expense.source_type || null,
+          source_value: expense.source_value || null,
           source_quote_id: expense.sourceQuoteId,
           currency: expense.currency,
           amount: expense.amount,
@@ -1283,7 +1307,7 @@ export const supabaseDataProvider = {
 
     if (!couples) return null;
 
-    // Create expense
+    // Create expense - copiar vendor_profile_id e source se existirem
     const { data: expense, error: expenseError } = await supabase
       .from('td_expenses')
       .insert({
@@ -1291,7 +1315,9 @@ export const supabaseDataProvider = {
         segment_id: quote.segment_id || null,
         category: quote.category,
         title: quote.title,
-        vendor_id: quote.vendor_id,
+        vendor_profile_id: quote.vendor_profile_id || null,
+        source_type: quote.source_type || null,
+        source_value: quote.source_value || null,
         source_quote_id: quote.id,
         currency: quote.currency,
         amount: quote.total_amount,
@@ -1350,7 +1376,7 @@ export const supabaseDataProvider = {
       .from('td_quotes')
       .insert({
         trip_id: original.trip_id,
-        vendor_id: original.vendor_id,
+        vendor_profile_id: original.vendor_profile_id,
         segment_id: original.segment_id,
         title: original.title,
         category: original.category,
@@ -1461,7 +1487,7 @@ export const supabaseDataProvider = {
   },
 
   // ==================== VENDOR REQUESTS ====================
-  getVendorRequests: async (vendorId: string) => {
+  getVendorRequests: async (vendor_profile_id: string) => {
     // Criar tabela td_vendor_requests se necessário
     // Por enquanto retorna array vazio
     return [];
@@ -1493,61 +1519,17 @@ export const supabaseDataProvider = {
 
     const { data: { user } } = await supabase.auth.getUser();
 
-    // Verificar se vendor existe ou criar
-    let vendorId = null;
-    
-    if (block.vendorPhone) {
-      const { data: existingVendors } = await supabase
-        .from('td_vendors')
-        .select('id, contacts')
-        .eq('trip_id', tripId)
-        .eq('status', 'Ativo');
-
-      const vendor = existingVendors?.find(v => 
-        v.contacts?.some((c: any) => c.phone === block.vendorPhone)
-      );
-
-      if (vendor) {
-        vendorId = vendor.id;
-      } else {
-        // Criar novo vendor
-        const { data: newVendor } = await supabase
-          .from('td_vendors')
-          .insert({
-            trip_id: tripId,
-            name: `Fornecedor ${block.vendorPhone}`,
-            categories: [block.category || 'Diversos'],
-            rating: 3,
-            preferred: false,
-            tags: ['Importado WhatsApp'],
-            risk_flags: [],
-            status: 'Ativo',
-            contacts: [{
-              id: 'c1',
-              name: 'WhatsApp',
-              role: 'Vendas',
-              phone: block.vendorPhone,
-              preferredMethod: 'WhatsApp',
-              isPrimary: true
-            }]
-          })
-          .select()
-          .single();
-
-        vendorId = newVendor?.id;
-      }
-    }
-
     // Calcular taxa de câmbio
     const rate = block.currency === 'BRL' ? 1 : (block.exchangeRate || 5.2);
     const amountBrl = block.totalAmount * rate;
 
-    // Criar quote
+    // Criar quote sem fornecedor (fonte: WhatsApp)
     const { data: quote, error } = await supabase
       .from('td_quotes')
       .insert({
         trip_id: tripId,
-        vendor_id: vendorId,
+        source_type: 'texto',
+        source_value: block.rawText || `WhatsApp: ${block.vendorPhone || 'Desconhecido'}`,
         title: block.suggestedQuote?.title || `Orçamento ${block.category}`,
         category: block.category || 'Diversos',
         provider: block.suggestedQuote?.provider || `Fornecedor ${block.vendorPhone}`,
@@ -1652,5 +1634,279 @@ export const supabaseDataProvider = {
         .from('td_reimbursements')
         .insert(reimbursements);
     }
+  },
+
+  // ==================== PERFIS GLOBAIS - VIAJANTES ====================
+  getTravelerProfiles: async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    const { data, error } = await supabase
+      .from('td_traveler_profiles')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .order('full_name', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  saveTravelerProfile: async (profile: any) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Usuário não autenticado');
+
+    if (profile.id) {
+      // Update
+      const { data, error } = await supabase
+        .from('td_traveler_profiles')
+        .update({
+          full_name: profile.fullName,
+          nickname: profile.nickname,
+          type: profile.type,
+          phone: profile.phone,
+          email: profile.email,
+          birth_date: profile.birthDate,
+          can_drive: profile.canDrive,
+          tags: profile.tags,
+          notes: profile.notes,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', profile.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } else {
+      // Insert
+      const { data, error } = await supabase
+        .from('td_traveler_profiles')
+        .insert({
+          user_id: user.id,
+          full_name: profile.fullName,
+          nickname: profile.nickname,
+          type: profile.type,
+          phone: profile.phone,
+          email: profile.email,
+          birth_date: profile.birthDate,
+          can_drive: profile.canDrive,
+          tags: profile.tags,
+          notes: profile.notes,
+          status: 'active'
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    }
+  },
+
+  deleteTravelerProfile: async (id: string) => {
+    const { error } = await supabase
+      .from('td_traveler_profiles')
+      .update({ status: 'archived' })
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+
+  // ==================== PERFIS GLOBAIS - FORNECEDORES ====================
+  getVendorProfiles: async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    const { data, error } = await supabase
+      .from('td_vendor_profiles')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  saveVendorProfile: async (profile: any) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Usuário não autenticado');
+
+    if (profile.id) {
+      // Update
+      const { data, error } = await supabase
+        .from('td_vendor_profiles')
+        .update({
+          name: profile.name,
+          legal_name: profile.legalName,
+          categories: profile.categories,
+          rating: profile.rating,
+          tags: profile.tags,
+          risk_flags: profile.riskFlags,
+          contacts: profile.contacts,
+          website_url: profile.websiteUrl,
+          instagram_url: profile.instagramUrl,
+          payment_terms_default: profile.paymentTermsDefault,
+          cancellation_policy_notes: profile.cancellationPolicyNotes,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', profile.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } else {
+      // Insert
+      const { data, error } = await supabase
+        .from('td_vendor_profiles')
+        .insert({
+          user_id: user.id,
+          name: profile.name,
+          legal_name: profile.legalName,
+          categories: profile.categories,
+          rating: profile.rating || 3,
+          tags: profile.tags || [],
+          risk_flags: profile.riskFlags || [],
+          contacts: profile.contacts || [],
+          website_url: profile.websiteUrl,
+          instagram_url: profile.instagramUrl,
+          payment_terms_default: profile.paymentTermsDefault,
+          cancellation_policy_notes: profile.cancellationPolicyNotes,
+          status: 'active'
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    }
+  },
+
+  deleteVendorProfile: async (id: string) => {
+    const { error } = await supabase
+      .from('td_vendor_profiles')
+      .update({ status: 'archived' })
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+
+  // ==================== VÍNCULOS - VIAJANTES X VIAGEM ====================
+  getTripTravelers: async (tripId: string) => {
+    const { data, error } = await supabase
+      .from('td_trip_travelers')
+      .select(`
+        *,
+        profile:td_traveler_profiles(*)
+      `)
+      .eq('trip_id', tripId)
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  linkTravelerToTrip: async (tripId: string, profileId: string, options: any = {}) => {
+    const { data, error } = await supabase
+      .from('td_trip_travelers')
+      .insert({
+        trip_id: tripId,
+        traveler_profile_id: profileId,
+        couple_id: options.coupleId,
+        goes_to_segments: options.goesToSegments || [],
+        is_payer: options.isPayer !== undefined ? options.isPayer : true,
+        custom_notes: options.customNotes
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  unlinkTravelerFromTrip: async (tripTravelerId: string) => {
+    const { error } = await supabase
+      .from('td_trip_travelers')
+      .delete()
+      .eq('id', tripTravelerId);
+
+    if (error) throw error;
+  },
+
+  updateTripTraveler: async (tripTravelerId: string, updates: any) => {
+    const { data, error } = await supabase
+      .from('td_trip_travelers')
+      .update({
+        couple_id: updates.coupleId,
+        goes_to_segments: updates.goesToSegments,
+        is_payer: updates.isPayer,
+        custom_notes: updates.customNotes,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', tripTravelerId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // ==================== VÍNCULOS - FORNECEDORES X VIAGEM ====================
+  getTripVendors: async (tripId: string) => {
+    const { data, error } = await supabase
+      .from('td_trip_vendors')
+      .select(`
+        *,
+        profile:td_vendor_profiles(*)
+      `)
+      .eq('trip_id', tripId)
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  linkVendorToTrip: async (tripId: string, profileId: string, options: any = {}) => {
+    const { data, error } = await supabase
+      .from('td_trip_vendors')
+      .insert({
+        trip_id: tripId,
+        vendor_profile_id: profileId,
+        preferred: options.preferred || false,
+        custom_rating: options.customRating,
+        custom_notes: options.customNotes
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  unlinkVendorFromTrip: async (tripVendorId: string) => {
+    const { error } = await supabase
+      .from('td_trip_vendors')
+      .delete()
+      .eq('id', tripVendorId);
+
+    if (error) throw error;
+  },
+
+  updateTripVendor: async (tripVendorId: string, updates: any) => {
+    const { data, error } = await supabase
+      .from('td_trip_vendors')
+      .update({
+        preferred: updates.preferred,
+        custom_rating: updates.customRating,
+        custom_notes: updates.customNotes,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', tripVendorId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
   }
 };

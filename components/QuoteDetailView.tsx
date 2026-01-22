@@ -8,7 +8,6 @@ import { formatSupabaseDateTime, dateToInput } from '../lib/formatters';
 interface QuoteDetailViewProps {
   trip: Trip;
   quote: Quote;
-  vendor?: Vendor;
   onEdit: () => void;
   onBack: () => void;
   onRefresh: () => void;
@@ -16,7 +15,7 @@ interface QuoteDetailViewProps {
   onNavigateToQuote: (id: string) => void;
 }
 
-const QuoteDetailView: React.FC<QuoteDetailViewProps> = ({ trip, quote, vendor, onEdit, onBack, onRefresh, onNavigateToExpense, onNavigateToQuote }) => {
+const QuoteDetailView: React.FC<QuoteDetailViewProps> = ({ trip, quote, onEdit, onBack, onRefresh, onNavigateToExpense, onNavigateToQuote }) => {
   const [activeTab, setActiveTab] = useState<'summary' | 'details' | 'audit' | 'variations' | 'payment'>('summary');
   const [versions, setVersions] = useState<QuoteVersion[]>([]);
   const [variations, setVariations] = useState<Quote[]>([]);

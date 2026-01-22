@@ -20,38 +20,42 @@ import VendorForm from './components/VendorForm';
 import ComparisonPage from './components/ComparisonPage';
 import LandingHero from './components/LandingHero';
 import HowItWorks from './components/HowItWorks';
+import GeneralDashboard from './components/GeneralDashboard';
 import TripList from './components/TripList';
 import TripWizard from './components/TripWizard';
 import TripDashboard from './components/TripDashboard';
+import TravelerProfileList from './components/TravelerProfileList';
+import VendorProfileList from './components/VendorProfileList';
 import { Trip, Quote, Expense, Vendor } from './types';
 import { dataProvider } from './lib/dataProvider';
 import { supabaseDataProvider } from './lib/supabaseDataProvider';
 import { Button } from './components/CommonUI';
 
 type ViewState =
-  | { type: 'dashboard' }
-  | { type: 'trips' }
-  | { type: 'travelers' }
-  | { type: 'traveler-detail'; id: string }
-  | { type: 'vendors' }
-  | { type: 'vendor-detail'; id: string }
-  | { type: 'vendor-edit'; id?: string }
-  | { type: 'quotes' }
-  | { type: 'quote-detail'; id: string }
-  | { type: 'quote-compare'; ids: string[] }
-  | { type: 'quote-edit'; id?: string; prefillVendorId?: string; initialData?: Partial<Quote> }
-  | { type: 'expenses' }
-  | { type: 'expense-detail'; id: string }
-  | { type: 'payments' }
-  | { type: 'settlement' };
+  | { type: 'general-dashboard' } // Dashboard geral (sem viagem ativa)
+  | { type: 'trips' } // Lista de viagens
+  | { type: 'trip-dashboard'; tripId: string } // Dashboard de uma viagem específica
+  | { type: 'travelers'; tripId?: string } // Viajantes (global ou por viagem)
+  | { type: 'traveler-detail'; id: string; tripId?: string }
+  | { type: 'vendors'; tripId?: string } // Fornecedores (global ou por viagem)
+  | { type: 'vendor-detail'; id: string; tripId?: string }
+  | { type: 'vendor-edit'; id?: string; tripId?: string }
+  | { type: 'quotes'; tripId: string }
+  | { type: 'quote-detail'; id: string; tripId: string }
+  | { type: 'quote-compare'; ids: string[]; tripId: string }
+  | { type: 'quote-edit'; id?: string; initialData?: Partial<Quote>; tripId: string }
+  | { type: 'expenses'; tripId: string }
+  | { type: 'expense-detail'; id: string; tripId: string }
+  | { type: 'payments'; tripId: string }
+  | { type: 'settlement'; tripId: string };
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [view, setView] = useState<ViewState>({ type: 'dashboard' });
+  const [view, setView] = useState<ViewState>({ type: 'general-dashboard' }); // Começa no dashboard geral
   const [trip, setTrip] = useState<Trip | null>(null);
-  const [activeTripId, setActiveTripId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [activeTripId, setActiveTripId] = useState<string | null>(null); // Viagem atualmente aberta (modo viagem)
+  const [loading, setLoading] = useState(false); // Não carrega viagem automaticamente
   const [showTripWizard, setShowTripWizard] = useState(false);
   const [authMode, setAuthMode] = useState<'signup' | 'login'>('login');
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -161,8 +165,8 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (user) {
-      loadData();
-      // Se o usuário está logado, sair da landing page
+      // Não carrega viagem automaticamente
+      // Usuário começa no dashboard geral
       setShowLanding(false);
     }
   }, [user]);
@@ -182,12 +186,29 @@ const App: React.FC = () => {
     setShowLanding(false);
   };
 
+  // Função para abrir uma viagem (entrar no modo viagem)
+  const openTrip = async (tripId: string) => {
+    await loadData(tripId);
+    setActiveTripId(tripId);
+    setView({ type: 'trip-dashboard', tripId });
+  };
+
+  // Função para fechar viagem (voltar ao modo geral)
+  const closeTrip = () => {
+    setActiveTripId(null);
+    setTrip(null);
+    setVendors([]);
+    setQuotes([]);
+    setExpenses([]);
+    setView({ type: 'general-dashboard' });
+  };
+
   const handleTripChange = async (tripId: string, forceNavigateToDashboard: boolean = false) => {
     await loadData(tripId);
     // Se forceNavigateToDashboard for true (ex: ao abrir viagem da lista), vai para dashboard
     // Caso contrário, mantém a view atual (ex: ao trocar viagem estando em Orçamentos)
     if (forceNavigateToDashboard) {
-      setView({ type: 'dashboard' });
+      setView({ type: 'trip-dashboard', tripId });
     }
     // Se não forçar, mantém a view atual (view não muda)
   };
@@ -317,61 +338,104 @@ const App: React.FC = () => {
 
   const renderContent = () => {
     switch (view.type) {
-      case 'dashboard': return <TripDashboard trip={trip} quotes={quotes} expenses={expenses} onNavigate={navigateTo} onRefresh={loadData} />;
-      case 'trips': return <TripList onNavigateToTrip={handleTripChange} onRefresh={loadData} />;
-      case 'travelers': return <TravelerList trip={trip} onRefresh={loadData} onNavigateToDetail={(id) => setView({ type: 'traveler-detail', id })} />;
-      case 'traveler-detail': return <TravelerDetailPage trip={trip} travelerId={view.id} onBack={() => setView({ type: 'travelers' })} onRefresh={loadData} />;
+      // Modo Geral (sem viagem ativa)
+      case 'general-dashboard': 
+        return <GeneralDashboard onNavigate={(tab) => setView({ type: tab as any })} onOpenTrip={openTrip} />;
+      
+      case 'trips': 
+        return <TripList onNavigateToTrip={(tripId) => openTrip(tripId)} onRefresh={() => {}} />;
+      
+      // Modo Viagem (com viagem ativa)
+      case 'trip-dashboard': 
+        if (!trip) return null;
+        return <TripDashboard trip={trip} quotes={quotes} expenses={expenses} onNavigate={navigateTo} onRefresh={() => loadData(view.tripId)} />;
+      
+      case 'travelers': 
+        if (view.tripId && trip) {
+          // Modo viagem: viajantes vinculados
+          return <TravelerList trip={trip} onRefresh={() => loadData(view.tripId!)} onNavigateToDetail={(id) => setView({ type: 'traveler-detail', id, tripId: view.tripId })} />;
+        } else {
+          // Modo geral: gerenciar perfis globais
+          return <TravelerProfileList onNavigate={(tab) => setView({ type: tab as any })} />;
+        }
+      
+      case 'traveler-detail': 
+        if (!trip) return null;
+        return <TravelerDetailPage trip={trip} travelerId={view.id} onBack={() => setView({ type: 'travelers', tripId: view.tripId })} onRefresh={() => loadData(activeTripId!)} />;
 
-      case 'vendors': return <VendorList trip={trip} onRefresh={loadData} onNavigateToVendor={(id) => setView({ type: 'vendor-detail', id })} onNavigateToWizard={() => setView({ type: 'vendor-edit' })} />;
+      case 'vendors': 
+        if (view.tripId && trip) {
+          // Modo viagem: fornecedores vinculados
+          return <VendorList trip={trip} onRefresh={() => loadData(view.tripId!)} onNavigateToVendor={(id) => setView({ type: 'vendor-detail', id, tripId: view.tripId })} onNavigateToWizard={() => setView({ type: 'vendor-edit', tripId: view.tripId })} />;
+        } else {
+          // Modo geral: gerenciar perfis globais
+          return <VendorProfileList onNavigate={(tab) => setView({ type: tab as any })} />;
+        }
+      
       case 'vendor-detail': {
+        if (!trip) return null;
         const v = vendors.find(item => item.id === view.id);
         if (!v) return null;
-        return <VendorDetailView trip={trip} vendor={v} onBack={() => setView({ type: 'vendors' })} onEdit={() => setView({ type: 'vendor-edit', id: v.id })} onRefresh={loadData} onNavigateToQuote={(id) => setView({ type: 'quote-detail', id })} onCreateQuote={() => setView({ type: 'quote-edit', prefillVendorId: v.id })} />;
+        return <VendorDetailView trip={trip} vendor={v} onBack={() => setView({ type: 'vendors', tripId: view.tripId })} onEdit={() => setView({ type: 'vendor-edit', id: v.id, tripId: view.tripId })} onRefresh={() => loadData(activeTripId!)} onNavigateToQuote={(id) => setView({ type: 'quote-detail', id, tripId: activeTripId! })} onCreateQuote={() => setView({ type: 'quote-edit', tripId: activeTripId! })} />;
       }
       case 'vendor-edit': {
+        if (!trip) return null;
         const v = vendors.find(item => item.id === view.id);
-        return <VendorForm trip={trip} initialData={v || {}} onCancel={() => setView({ type: 'vendors' })} onSave={async (vData) => { await dataProvider.saveVendor(vData); loadData(); setView({ type: 'vendors' }); }} />;
+        return <VendorForm trip={trip} initialData={v || {}} onCancel={() => setView({ type: 'vendors', tripId: view.tripId })} onSave={async (vData) => { await dataProvider.saveVendor(vData); loadData(activeTripId!); setView({ type: 'vendors', tripId: view.tripId }); }} />;
       }
 
-      case 'quotes': return <QuoteList
-        trip={trip}
-        vendors={vendors}
-        quotes={quotes}
-        onRefresh={loadData}
-        onNavigateToQuote={(id) => setView({ type: 'quote-detail', id })}
-        onNavigateToWizard={(initialData) => setView({ type: 'quote-edit', initialData })}
-        onNavigateToCompare={(ids) => setView({ type: 'quote-compare', ids })}
-      />;
+      case 'quotes': 
+        if (!trip) return null;
+        return <QuoteList
+          trip={trip}
+          vendors={vendors}
+          quotes={quotes}
+          onRefresh={() => loadData(view.tripId)}
+          onNavigateToQuote={(id) => setView({ type: 'quote-detail', id, tripId: view.tripId })}
+          onNavigateToWizard={(initialData) => setView({ type: 'quote-edit', initialData, tripId: view.tripId })}
+          onNavigateToCompare={(ids) => setView({ type: 'quote-compare', ids, tripId: view.tripId })}
+        />;
       case 'quote-detail': {
+        if (!trip) return null;
         const q = quotes.find(item => item.id === view.id);
         if (!q) return null;
-        return <QuoteDetailView trip={trip} quote={q} vendor={vendors.find(v => v.id === q.vendorId)} onBack={() => setView({ type: 'quotes' })} onEdit={() => setView({ type: 'quote-edit', id: q.id })} onRefresh={loadData} onNavigateToExpense={async () => { const exp = await dataProvider.closeQuoteToExpense(trip.id, q.id); if (exp) { await loadData(); setView({ type: 'expense-detail', id: exp.id }); } }} onNavigateToQuote={(id) => setView({ type: 'quote-detail', id })} />;
+        return <QuoteDetailView trip={trip} quote={q} onBack={() => setView({ type: 'quotes', tripId: view.tripId })} onEdit={() => setView({ type: 'quote-edit', id: q.id, tripId: view.tripId })} onRefresh={() => loadData(view.tripId)} onNavigateToExpense={async () => { const exp = await dataProvider.closeQuoteToExpense(trip.id, q.id); if (exp) { await loadData(view.tripId); setView({ type: 'expense-detail', id: exp.id, tripId: view.tripId }); } }} onNavigateToQuote={(id) => setView({ type: 'quote-detail', id, tripId: view.tripId })} />;
       }
       case 'quote-compare': {
+        if (!trip) return null;
         const qs = quotes.filter(q => view.ids.includes(q.id));
-        return <ComparisonPage trip={trip} quotes={qs} onBack={() => setView({ type: 'quotes' })} onRefresh={loadData} onNavigateToQuote={(id) => setView({ type: 'quote-detail', id })} />;
+        return <ComparisonPage trip={trip} quotes={qs} onBack={() => setView({ type: 'quotes', tripId: view.tripId })} onRefresh={() => loadData(view.tripId)} onNavigateToQuote={(id) => setView({ type: 'quote-detail', id, tripId: view.tripId })} />;
       }
       case 'quote-edit': {
+        if (!trip) return null;
         const q = quotes.find(item => item.id === view.id);
-        const initial = view.initialData || (view.prefillVendorId ? { vendorId: view.prefillVendorId, provider: vendors.find(v => v.id === view.prefillVendorId)?.name } : {});
+        const initial = view.initialData || {};
         return <QuoteWizard
           trip={trip}
           vendors={vendors}
           initialData={q || initial}
-          onCancel={() => setView({ type: 'quotes' })}
-          onSave={async (qData) => { await dataProvider.saveQuote(qData); loadData(); setView({ type: 'quotes' }); }}
+          onCancel={() => setView({ type: 'quotes', tripId: view.tripId })}
+          onSave={async (qData) => { await dataProvider.saveQuote(qData); loadData(view.tripId); setView({ type: 'quotes', tripId: view.tripId }); }}
         />;
       }
 
-      case 'expenses': return <ExpenseList trip={trip} expenses={expenses} onRefresh={loadData} onNavigateToExpense={(id) => setView({ type: 'expense-detail', id })} />;
+      case 'expenses': 
+        if (!trip) return null;
+        return <ExpenseList trip={trip} expenses={expenses} onRefresh={() => loadData(view.tripId)} onNavigateToExpense={(id) => setView({ type: 'expense-detail', id, tripId: view.tripId })} />;
       case 'expense-detail': {
+        if (!trip) return null;
         const exp = expenses.find(item => item.id === view.id);
         if (!exp) return null;
-        return <ExpenseDetailView trip={trip} expense={exp} onBack={() => setView({ type: 'expenses' })} onRefresh={loadData} />;
+        return <ExpenseDetailView trip={trip} expense={exp} onBack={() => setView({ type: 'expenses', tripId: view.tripId })} onRefresh={() => loadData(view.tripId)} />;
       }
-      case 'payments': return <PaymentsPage trip={trip} />;
-      case 'settlement': return <SettlementPage trip={trip} />;
-      default: return <Dashboard trip={trip} quotes={quotes} expenses={expenses} onNavigate={navigateTo} onRefresh={loadData} />;
+      case 'payments': 
+        if (!trip) return null;
+        return <PaymentsPage trip={trip} />;
+      case 'settlement': 
+        if (!trip) return null;
+        return <SettlementPage trip={trip} />;
+      default: 
+        return <GeneralDashboard onNavigate={(tab) => setView({ type: tab as any })} onOpenTrip={openTrip} />;
     }
   };
 
@@ -384,6 +448,7 @@ const App: React.FC = () => {
       userEmail={user?.email}
       onTripChange={handleTripChange}
       onCreateTrip={handleCreateTrip}
+      onCloseTrip={closeTrip}
     >
       {renderContent()}
       

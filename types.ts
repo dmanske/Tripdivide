@@ -97,7 +97,9 @@ export interface Expense {
   segmentId: string | 'general';
   category: string;
   title: string;
-  vendorId?: string;
+  vendor_profile_id?: string; // Referência ao perfil global de fornecedor
+  source_type?: 'link' | 'texto' | 'manual'; // Tipo de fonte quando não há fornecedor
+  source_value?: string; // Valor da fonte
   sourceQuoteId?: string;
   currency: Currency;
   amount: number;
@@ -206,7 +208,9 @@ export interface Trip {
 export interface Quote {
   id: string;
   tripId: string;
-  vendorId: string;
+  vendor_profile_id?: string; // Referência ao perfil global de fornecedor
+  source_type?: 'link' | 'texto' | 'manual'; // Tipo de fonte quando não há fornecedor
+  source_value?: string; // Valor da fonte
   segmentId: string;
   title: string;
   category: string;
@@ -299,7 +303,7 @@ export interface VendorContact {
 export interface VendorQuoteRequest {
   id: string;
   tripId: string;
-  vendorId: string;
+  vendor_profile_id: string; // Referência ao perfil global de fornecedor
   category: string;
   segmentId: string;
   message: string;

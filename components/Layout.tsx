@@ -1,24 +1,32 @@
-
 import React from 'react';
 import { supabase } from '../lib/supabase';
 import { ICONS } from '../constants.tsx';
-import TripSwitcher from './TripSwitcher';
+import { Button } from './CommonUI';
 
 interface LayoutProps {
   children: React.ReactNode;
   activeTab: string;
   setActiveTab: (tab: string) => void;
-  tripId: string | null;
-  tripName: string;
+  tripId: string | null; // null = modo geral, string = modo viagem
+  tripName?: string;
   userEmail?: string;
-  onTripChange: (tripId: string, forceNavigateToDashboard?: boolean) => void;
-  onCreateTrip: () => void;
+  onTripChange?: (tripId: string, forceNavigateToDashboard?: boolean) => void;
+  onCreateTrip?: () => void;
+  onCloseTrip?: () => void; // Função para voltar ao modo geral
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, tripId, tripName, userEmail, onTripChange, onCreateTrip }) => {
-  const menuItems = [
-    { id: 'dashboard', label: 'Painel Geral', icon: ICONS.Dashboard },
+const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, tripId, tripName, userEmail, onTripChange, onCreateTrip, onCloseTrip }) => {
+  // Menu para modo geral (sem viagem ativa)
+  const generalMenuItems = [
+    { id: 'general-dashboard', label: 'Dashboard', icon: ICONS.Dashboard },
     { id: 'trips', label: 'Viagens', icon: ICONS.Dashboard },
+    { id: 'travelers', label: 'Viajantes', icon: ICONS.Travelers },
+    { id: 'vendors', label: 'Fornecedores', icon: ICONS.Vendors },
+  ];
+
+  // Menu para modo viagem (com viagem ativa)
+  const tripMenuItems = [
+    { id: 'trip-dashboard', label: 'Dashboard', icon: ICONS.Dashboard },
     { id: 'travelers', label: 'Viajantes', icon: ICONS.Travelers },
     { id: 'vendors', label: 'Fornecedores', icon: ICONS.Vendors },
     { id: 'quotes', label: 'Orçamentos', icon: ICONS.Quotes },
@@ -26,6 +34,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, trip
     { id: 'payments', label: 'Fluxo de Caixa', icon: ICONS.Expenses },
     { id: 'settlement', label: 'Acerto de Contas', icon: ICONS.Settlement },
   ];
+
+  const menuItems = tripId ? tripMenuItems : generalMenuItems;
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -42,15 +52,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, trip
             <h1 className="text-xl font-black tracking-tight text-white uppercase">TripDivide</h1>
           </div>
           
-          {/* Trip Switcher */}
-          {tripId && (
-            <div className="mt-2">
-              <TripSwitcher
-                currentTripId={tripId}
-                currentTripName={tripName}
-                onTripChange={onTripChange}
-                onCreateNew={onCreateTrip}
-              />
+          {/* Modo Viagem: Mostrar viagem ativa e botão voltar */}
+          {tripId && tripName && (
+            <div className="mt-2 p-3 bg-indigo-600/10 border border-indigo-600/30 rounded-lg">
+              <div className="text-[10px] font-bold text-indigo-400 uppercase mb-1">Viagem Ativa</div>
+              <div className="text-sm font-bold text-white mb-2">{tripName}</div>
+              <Button onClick={onCloseTrip} className="w-full bg-gray-800 hover:bg-gray-700 text-xs">
+                ← Voltar ao Geral
+              </Button>
             </div>
           )}
         </div>

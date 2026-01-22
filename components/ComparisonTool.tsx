@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Trip, Quote, QuoteStatus } from '../types';
-import { Card, Button, Badge } from './CommonUI';
+import { Card, Button, Badge, Modal } from './CommonUI';
 import { dataProvider } from '../lib/dataProvider';
 
 interface ComparisonToolProps {
@@ -12,6 +12,8 @@ interface ComparisonToolProps {
 
 const ComparisonTool: React.FC<ComparisonToolProps> = ({ trip, quotes, onRefresh }) => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [confirmQuote, setConfirmQuote] = useState<Quote | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   
   const selectedQuotes = quotes.filter(q => selectedIds.includes(q.id));
   const availableQuotes = quotes.filter(q => q.status !== QuoteStatus.REJECTED && q.status !== QuoteStatus.CHOSEN);
@@ -20,7 +22,11 @@ const ComparisonTool: React.FC<ComparisonToolProps> = ({ trip, quotes, onRefresh
     if (selectedIds.includes(id)) {
       setSelectedIds(prev => prev.filter(i => i !== id));
     } else {
-      if (selectedIds.length >= 4) return alert('Máximo de 4 itens para comparar.');
+      if (selectedIds.length >= 4) {
+        setSuccessMessage('Máximo de 4 itens para comparar');
+        setTimeout(() => setSuccessMessage(null), 3000);
+        return;
+      }
       setSelectedIds(prev => [...prev, id]);
     }
   };
@@ -50,39 +56,50 @@ const ComparisonTool: React.FC<ComparisonToolProps> = ({ trip, quotes, onRefresh
   };
 
   const handleFinalize = async (quote: Quote) => {
-    if (confirm(`🏆 CONSENSO ATINGIDO! Deseja fechar este orçamento com ${quote.provider}?\n\nIsso criará automaticamente uma despesa na lista oficial.`)) {
-      await dataProvider.saveQuote({ ...quote, status: QuoteStatus.CHOSEN });
-      
-      const expense = {
-        id: '',
-        tripId: trip.id,
-        segmentId: quote.segmentId,
-        quoteId: quote.id,
-        title: `${quote.category}: ${quote.provider}`,
-        category: quote.category,
-        currency: quote.currency,
-        // Fix: Changed quote.value to quote.totalAmount
-        value: quote.totalAmount,
-        exchangeRate: quote.exchangeRate,
-        amountBrl: quote.amountBrl,
-        dueDate: quote.validUntil,
-        status: 'PLANNED' as any,
-        splits: trip.couples.map(c => ({
-          coupleId: c.id,
-          amount: quote.amountBrl / 3,
-          percentage: 33.33
-        }))
-      };
-      await dataProvider.saveExpense(expense as any);
-      onRefresh();
-      alert('Orçamento fechado e despesa criada!');
-    }
+    setConfirmQuote(quote);
+  };
+
+  const confirmFinalize = async () => {
+    if (!confirmQuote) return;
+    
+    await dataProvider.saveQuote({ ...confirmQuote, status: QuoteStatus.CHOSEN });
+    
+    const expense = {
+      id: '',
+      tripId: trip.id,
+      segmentId: confirmQuote.segmentId,
+      sourceQuoteId: confirmQuote.id,
+      title: `${confirmQuote.category}: ${confirmQuote.provider}`,
+      category: confirmQuote.category,
+      currency: confirmQuote.currency,
+      amount: confirmQuote.totalAmount,
+      exchangeRate: confirmQuote.exchangeRate,
+      amountBrl: confirmQuote.amountBrl,
+      dueDate: confirmQuote.validUntil,
+      status: 'confirmed' as any,
+      // Copiar vendor_profile_id e source da quote
+      vendor_profile_id: confirmQuote.vendor_profile_id || null,
+      source_type: confirmQuote.source_type || null,
+      source_value: confirmQuote.source_value || null
+    };
+    await dataProvider.saveExpense(expense as any);
+    
+    setConfirmQuote(null);
+    setSuccessMessage('Orçamento fechado e despesa criada!');
+    setTimeout(() => setSuccessMessage(null), 3000);
+    onRefresh();
   };
 
   const requiredVotes = trip.consensusRule === '2/3' ? 2 : 3;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
+      {successMessage && (
+        <div className="fixed top-4 right-4 bg-emerald-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-in slide-in-from-top">
+          {successMessage}
+        </div>
+      )}
+      
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold text-white">Votação & Decisão</h2>
@@ -217,6 +234,36 @@ const ComparisonTool: React.FC<ComparisonToolProps> = ({ trip, quotes, onRefresh
            <p className="text-sm">Clique nos orçamentos acima para trazê-los para a mesa de votação</p>
         </div>
       )}
+
+      {/* Modal de Confirmação */}
+      <Modal isOpen={!!confirmQuote} onClose={() => setConfirmQuote(null)} title="Fechar Orçamento">
+        <div className="space-y-4">
+          <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-lg p-4">
+            <p className="text-lg font-bold text-white mb-2">🏆 CONSENSO ATINGIDO!</p>
+            <p className="text-gray-300">
+              Deseja fechar este orçamento com <span className="font-bold text-indigo-400">{confirmQuote?.provider}</span>?
+            </p>
+          </div>
+          
+          <div className="bg-gray-800/50 rounded-lg p-4 space-y-2">
+            <p className="text-sm text-gray-400">Isso irá:</p>
+            <ul className="text-sm text-gray-300 space-y-1 ml-4">
+              <li>• Marcar o orçamento como "Fechado"</li>
+              <li>• Criar automaticamente uma despesa na lista oficial</li>
+              <li>• Permitir registrar pagamentos e divisão</li>
+            </ul>
+          </div>
+
+          <div className="flex gap-3 pt-4 border-t border-gray-800">
+            <Button variant="ghost" onClick={() => setConfirmQuote(null)} className="flex-1">
+              Cancelar
+            </Button>
+            <Button variant="primary" onClick={confirmFinalize} className="flex-1">
+              Confirmar e Fechar
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

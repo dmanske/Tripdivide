@@ -29,8 +29,7 @@ const QuoteList: React.FC<QuoteListProps> = ({ trip, vendors, quotes, onRefresh,
 
   const filteredQuotes = quotes.filter(q => {
     return (filters.category === 'all' || q.category === filters.category) &&
-           (filters.status === 'all' || q.status === (filters.status as any)) &&
-           (filters.vendor === 'all' || q.vendorId === filters.vendor);
+           (filters.status === 'all' || q.status === (filters.status as any));
   });
 
   const handleImportFinalize = async (blocks: ParsedQuoteBlock[]) => {
@@ -128,7 +127,19 @@ const QuoteList: React.FC<QuoteListProps> = ({ trip, vendors, quotes, onRefresh,
                  <Badge color={quote.status === QuoteStatus.CHOSEN ? 'green' : 'gray'}>{quote.status}</Badge>
               </div>
               <h3 className="text-xl font-black text-white mb-1 leading-tight uppercase group-hover:text-indigo-400 transition-colors">{quote.title}</h3>
-              <p className="text-xs text-gray-600 font-bold mb-4">{quote.provider}</p>
+              <div className="flex items-center gap-2 mb-4">
+                {quote.vendor_profile_id ? (
+                  <p className="text-xs text-gray-600 font-bold">{quote.provider}</p>
+                ) : (
+                  <>
+                    <Badge color="amber" className="text-[9px]">Sem fornecedor</Badge>
+                    <p className="text-xs text-gray-500">
+                      Fonte: {quote.source_type === 'link' ? '🔗' : quote.source_type === 'texto' ? '📄' : '✍️'} 
+                      {quote.source_type}
+                    </p>
+                  </>
+                )}
+              </div>
               
               <div className="mt-auto bg-gray-950 p-4 rounded-xl border border-gray-800 mb-4 group-hover:bg-indigo-600/5 transition-colors">
                  <p className="text-2xl font-black text-indigo-400">R$ {quote.amountBrl.toLocaleString('pt-BR')}</p>

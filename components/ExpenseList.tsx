@@ -93,6 +93,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ trip, expenses, onRefresh, on
             <tr>
               <th className="p-4">Título / Segmento</th>
               <th className="p-4">Categoria</th>
+              <th className="p-4">Fornecedor / Fonte</th>
               <th className="p-4">Valor Total</th>
               <th className="p-4">Status</th>
               <th className="p-4 text-right">Ação</th>
@@ -113,6 +114,21 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ trip, expenses, onRefresh, on
                   <Badge color="indigo">{e.category}</Badge>
                 </td>
                 <td className="p-4">
+                  {e.vendor_profile_id ? (
+                    <div className="text-sm text-gray-300 font-medium">Fornecedor vinculado</div>
+                  ) : e.source_type ? (
+                    <div className="flex items-center gap-2">
+                      <Badge color="amber" className="text-[9px]">Sem fornecedor</Badge>
+                      <span className="text-xs text-gray-500">
+                        {e.source_type === 'link' ? '🔗' : e.source_type === 'texto' ? '📄' : '✍️'} 
+                        {e.source_type}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-gray-600 italic">Não informado</span>
+                  )}
+                </td>
+                <td className="p-4">
                   <div className="font-black text-white">R$ {e.amountBrl.toLocaleString('pt-BR')}</div>
                   <div className="text-[10px] text-gray-600">{e.currency} {e.amount.toLocaleString()} ({e.exchangeRate})</div>
                 </td>
@@ -128,7 +144,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ trip, expenses, onRefresh, on
             ))}
             {filteredExpenses.length === 0 && (
               <tr>
-                <td colSpan={5} className="p-20 text-center text-gray-600 italic">Nenhuma despesa oficial encontrada com estes filtros.</td>
+                <td colSpan={6} className="p-20 text-center text-gray-600 italic">Nenhuma despesa oficial encontrada com estes filtros.</td>
               </tr>
             )}
           </tbody>

@@ -198,7 +198,25 @@ const TripList: React.FC<TripListProps> = ({ onNavigateToTrip, onRefresh }) => {
         <TripWizard
           onClose={() => setShowWizard(false)}
           onSave={async (tripData) => {
-            const newTrip = await supabaseDataProvider.saveTrip(tripData);
+            const { selectedTravelerIds, selectedVendorIds, markVendorsAsFavorite, ...tripDataWithoutSelections } = tripData;
+            const newTrip = await supabaseDataProvider.saveTrip(tripDataWithoutSelections);
+            
+            // Vincular viajantes selecionados
+            if (selectedTravelerIds && selectedTravelerIds.length > 0) {
+              for (const travelerId of selectedTravelerIds) {
+                await supabaseDataProvider.linkTravelerToTrip(newTrip.id, travelerId);
+              }
+            }
+            
+            // Vincular fornecedores selecionados
+            if (selectedVendorIds && selectedVendorIds.length > 0) {
+              for (const vendorId of selectedVendorIds) {
+                await supabaseDataProvider.linkVendorToTrip(newTrip.id, vendorId, {
+                  preferred: markVendorsAsFavorite || false
+                });
+              }
+            }
+            
             setShowWizard(false);
             
             // Definir como ativa e navegar para o painel

@@ -35,7 +35,7 @@ const VendorDetailView: React.FC<VendorDetailViewProps> = ({ trip, vendor, onEdi
       dataProvider.getQuotes(trip.id),
       dataProvider.getVendorRequests(vendor.id)
     ]);
-    setVendorQuotes(allQ.filter(q => q.vendorId === vendor.id));
+    setVendorQuotes(allQ.filter(q => q.vendor_profile_id === vendor.id));
     setRequests(allR);
   };
 
@@ -65,7 +65,7 @@ const VendorDetailView: React.FC<VendorDetailViewProps> = ({ trip, vendor, onEdi
     
     const message = getTemplate();
     await dataProvider.saveVendorRequest({
-      id: '', tripId: trip.id, vendorId: vendor.id, category: requestData.category, segmentId: requestData.segmentId, message, createdAt: ''
+      id: '', tripId: trip.id, vendor_profile_id: vendor.id, category: requestData.category, segmentId: requestData.segmentId, message, createdAt: ''
     });
     
     const encoded = encodeURIComponent(message);
