@@ -287,62 +287,6 @@ const App: React.FC = () => {
 
   const navigateTo = (tab: string) => setView({ type: tab as any });
 
-  // Se não tem viagem, mostrar tela vazia com opção de criar
-  if (!trip) {
-    return (
-      <Layout 
-        activeTab="dashboard" 
-        setActiveTab={navigateTo} 
-        tripId={null}
-        tripName="Sem viagem" 
-        userEmail={user?.email}
-        onTripChange={handleTripChange}
-        onCreateTrip={handleCreateTrip}
-      >
-        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-6">
-          <div className="max-w-md space-y-6">
-            <div className="text-6xl mb-4">🌍</div>
-            <h2 className="text-3xl font-black text-white uppercase tracking-tight">
-              Nenhuma viagem criada
-            </h2>
-            <p className="text-gray-400 text-lg">
-              Crie sua primeira viagem para começar a organizar cotações, despesas e viajantes.
-            </p>
-            <Button
-              variant="primary"
-              onClick={handleCreateTrip}
-              className="!px-8 !py-4 !text-lg font-black uppercase"
-            >
-              + Criar Primeira Viagem
-            </Button>
-          </div>
-        </div>
-        
-        {/* Trip Wizard */}
-        {showTripWizard && (
-          <TripWizard
-            onClose={() => setShowTripWizard(false)}
-            onSave={async (tripData) => {
-              const newTrip = await supabaseDataProvider.saveTrip(tripData);
-              
-              // Create default segment
-              await dataProvider.saveSegment({
-                tripId: newTrip.id,
-                name: 'Geral',
-                startDate: '',
-                endDate: ''
-              });
-
-              setShowTripWizard(false);
-              await loadData(newTrip.id);
-              setView({ type: 'trip-dashboard', tripId: newTrip.id });
-            }}
-          />
-        )}
-      </Layout>
-    );
-  }
-
   const renderContent = () => {
     switch (view.type) {
       // Modo Geral (sem viagem ativa)
