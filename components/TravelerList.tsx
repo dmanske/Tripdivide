@@ -1,50 +1,10 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Trip, Traveler, TravelerType, Couple, TravelerIssue } from '../types';
-import { Card, Badge, Button, Input, Modal } from './CommonUI';
+import { Trip, Traveler, TravelerType } from '../types';
+import { Badge, Button, Input, Modal } from './CommonUI';
 import { dataProvider } from '../lib/dataProvider';
 import TravelerWizard from './TravelerWizard';
 import TravelerImportModal from './TravelerImportModal';
-import DocumentDrawer from './DocumentDrawer';
-import { formatPhone, formatSupabaseDate } from '../lib/formatters';
-
-// Funções de formatação de documentos
-const formatDocNumber = (value: string, docType: string): string => {
-  if (!value) return '';
-  
-  // Remove tudo que não é letra ou número
-  const cleaned = value.replace(/[^A-Za-z0-9]/g, '');
-  
-  switch (docType) {
-    case 'CPF':
-      // 000.000.000-00
-      return cleaned
-        .slice(0, 11)
-        .replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
-        .replace(/(\d{3})(\d{3})(\d{3})(\d{1})$/, '$1.$2.$3-$4')
-        .replace(/(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3')
-        .replace(/(\d{3})(\d{2})$/, '$1.$2');
-    
-    case 'RG':
-      // 00.000.000-0
-      return cleaned
-        .slice(0, 9)
-        .replace(/(\d{2})(\d{3})(\d{3})(\d{1})/, '$1.$2.$3-$4')
-        .replace(/(\d{2})(\d{3})(\d{3})$/, '$1.$2.$3')
-        .replace(/(\d{2})(\d{3})$/, '$1.$2');
-    
-    case 'CNH':
-      // 00000000000 (11 dígitos sem formatação)
-      return cleaned.slice(0, 11);
-    
-    case 'Passaporte':
-      // AA000000 (2 letras + 6 números)
-      return cleaned.slice(0, 8).toUpperCase();
-    
-    default:
-      return value;
-  }
-};
 
 interface TravelerListProps {
   trip: Trip;
@@ -59,6 +19,7 @@ const TravelerList: React.FC<TravelerListProps> = ({ trip, onRefresh, onNavigate
   const [editingTraveler, setEditingTraveler] = useState<Partial<Traveler> | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
+  const [filterCouple, setFilterCouple] = useState('all');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -72,18 +33,46 @@ const TravelerList: React.FC<TravelerListProps> = ({ trip, onRefresh, onNavigate
 
   const filteredTravelers = useMemo(() => {
     const searchLower = searchTerm.toLowerCase();
-    return travelers.filter(t => {
+    return travelers.filter((t: Traveler) => {
       const fullName = t.fullName || '';
       const nickname = t.nickname || '';
       const phone = t.phone || '';
+      const couple = trip.couples.find((c: any) => c.id === t.coupleId);
+      const coupleName = couple?.name || '';
       
       const matchesSearch = fullName.toLowerCase().includes(searchLower) || 
                             phone.includes(searchTerm) || 
-                            nickname.toLowerCase().includes(searchLower);
+                            nickname.toLowerCase().includes(searchLower) ||
+                            coupleName.toLowerCase().includes(searchLower);
       const matchesType = filterType === 'all' || t.type === filterType;
-      return matchesSearch && matchesType;
+      const matchesCouple = filterCouple === 'all' || t.coupleId === filterCouple;
+      return matchesSearch && matchesType && matchesCouple;
     });
-  }, [travelers, searchTerm, filterType]);
+  }, [travelers, searchTerm, filterType, filterCouple, trip.couples]);
+
+  // Agrupar viajantes por casal
+  const groupedTravelers = useMemo(() => {
+    const groups: Record<string, Traveler[]> = {};
+    
+    filteredTravelers.forEach((t: Traveler) => {
+      const coupleId = t.coupleId || 'sem-grupo';
+      if (!groups[coupleId]) {
+        groups[coupleId] = [];
+      }
+      groups[coupleId].push(t);
+    });
+
+    // Ordenar dentro de cada grupo: adultos primeiro, depois crianças
+    Object.keys(groups).forEach((coupleId: string) => {
+      groups[coupleId].sort((a: Traveler, b: Traveler) => {
+        if (a.type === 'Adulto' && b.type !== 'Adulto') return -1;
+        if (a.type !== 'Adulto' && b.type === 'Adulto') return 1;
+        return (a.fullName || '').localeCompare(b.fullName || '');
+      });
+    });
+
+    return groups;
+  }, [filteredTravelers]);
 
   const handleOpenWizard = (t: Partial<Traveler> | null = null) => {
     setEditingTraveler(t);
@@ -121,80 +110,101 @@ const TravelerList: React.FC<TravelerListProps> = ({ trip, onRefresh, onNavigate
         </header>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-gray-900/40 p-4 rounded-2xl border border-gray-800">
-           <div className="md:col-span-2">
-              <Input placeholder="Buscar por nome, fone, email..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+           <div className="md:col-span-1">
+              <Input placeholder="Buscar por nome, fone, grupo..." value={searchTerm} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)} />
            </div>
-           <Input as="select" value={filterType} onChange={e => setFilterType(e.target.value)}>
+           <Input as="select" value={filterType} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilterType(e.target.value)}>
               <option value="all">Todos os tipos</option>
-              {Object.values(TravelerType).map(t => <option key={t} value={t}>{t}</option>)}
+              {Object.values(TravelerType).map((t: string) => <option key={t} value={t}>{t}</option>)}
+           </Input>
+           <Input as="select" value={filterCouple} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilterCouple(e.target.value)}>
+              <option value="all">Todos os grupos</option>
+              {trip.couples.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
            </Input>
            <div className="flex items-center gap-2 justify-center">
               <Badge color="indigo">{travelers.length} Total</Badge>
-              <Badge color="gray">{travelers.filter(t => t.type === TravelerType.ADULT).length} ADU</Badge>
+              <Badge color="gray">{travelers.filter((t: Traveler) => t.type === TravelerType.ADULT).length} ADU</Badge>
            </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead className="text-[10px] font-black uppercase text-gray-500 border-b border-gray-800">
-              <tr>
-                <th className="p-4">Nome / Tipo</th>
-                <th className="p-4">Casal / Grupo</th>
-                <th className="p-4">Segmentos</th>
-                <th className="p-4">Status</th>
-                <th className="p-4 text-center">Issues</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-800">
-              {filteredTravelers.map(t => {
-                const issues = dataProvider.computeTravelerIssues(t, trip);
-                const hasErrors = issues.some(i => i.type === 'error');
-                const hasWarnings = issues.some(i => i.type === 'warning');
-                const displayName = t.fullName || 'Sem Nome';
+        <div className="space-y-6">
+          {Object.entries(groupedTravelers).map(([coupleId, groupTravelers]: [string, Traveler[]]) => {
+            const couple = trip.couples.find((c: any) => c.id === coupleId);
+            const coupleName = couple?.name || 'Sem Grupo';
+            
+            return (
+              <div key={coupleId} className="bg-gray-900/40 rounded-2xl border border-gray-800 overflow-hidden">
+                {/* Header do grupo */}
+                <div className="px-6 py-3 bg-gray-900/60 border-b border-gray-800">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-black text-white uppercase tracking-wide">{coupleName}</h3>
+                    <Badge color="gray">{groupTravelers.length} {groupTravelers.length === 1 ? 'viajante' : 'viajantes'}</Badge>
+                  </div>
+                </div>
 
-                return (
-                  <tr key={t.id} onClick={() => {
-                    console.log('🖱️ Clicou no viajante:', t.fullName, 'ID:', t.id);
-                    onNavigateToDetail(t.id);
-                  }} className="hover:bg-gray-900/40 transition-colors cursor-pointer">
-                    <td className="p-4">
-                       <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${t.type === TravelerType.ADULT ? 'bg-indigo-600/20 text-indigo-400' : 'bg-yellow-600/20 text-yellow-400'}`}>
-                             {displayName.charAt(0)}
-                          </div>
-                          <div>
-                             <p className="font-bold text-gray-200">{displayName}</p>
-                             <p className="text-[10px] text-gray-500 uppercase">{t.type} {t.nickname ? `• ${t.nickname}` : ''}</p>
-                          </div>
-                       </div>
-                    </td>
-                    <td className="p-4">
-                       <span className="text-sm text-gray-400 font-medium">{trip.couples.find(c => c.id === t.coupleId)?.name}</span>
-                    </td>
-                    <td className="p-4">
-                       <div className="flex flex-wrap gap-1">
-                          {(t.goesToSegments || []).map(sid => {
-                            const seg = trip.segments.find(s => s.id === sid);
-                            return <span key={sid} className="text-[9px] px-1.5 py-0.5 bg-gray-800 text-gray-500 rounded uppercase font-bold">{seg?.name}</span>
-                          })}
-                       </div>
-                    </td>
-                    <td className="p-4">
-                       <Badge color={t.isPayer ? 'green' : 'gray'}>{t.isPayer ? 'Pagante' : 'Não pagante'}</Badge>
-                    </td>
-                    <td className="p-4 text-center">
-                       <div className="flex justify-center gap-1">
-                          {hasErrors && <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" title="Erro crítico" />}
-                          {hasWarnings && <div className="w-2 h-2 rounded-full bg-amber-500" title="Atenção" />}
-                          {!hasErrors && !hasWarnings && <span className="text-emerald-500 text-xs">✅</span>}
-                       </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {filteredTravelers.length === 0 && (
+                {/* Tabela do grupo */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="text-[10px] font-black uppercase text-gray-500 border-b border-gray-800">
+                      <tr>
+                        <th className="p-4">Nome / Tipo</th>
+                        <th className="p-4">Segmentos</th>
+                        <th className="p-4">Status</th>
+                        <th className="p-4 text-center">Issues</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-800">
+                      {groupTravelers.map((t: Traveler) => {
+                        const issues = dataProvider.computeTravelerIssues(t, trip);
+                        const hasErrors = issues.some((i: any) => i.type === 'error');
+                        const hasWarnings = issues.some((i: any) => i.type === 'warning');
+                        const displayName = t.fullName || 'Sem Nome';
+
+                        return (
+                          <tr key={t.id} onClick={() => {
+                            console.log('🖱️ Clicou no viajante:', t.fullName, 'ID:', t.id);
+                            onNavigateToDetail(t.id);
+                          }} className="hover:bg-gray-900/40 transition-colors cursor-pointer">
+                            <td className="p-4">
+                               <div className="flex items-center gap-3">
+                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${t.type === TravelerType.ADULT ? 'bg-indigo-600/20 text-indigo-400' : 'bg-yellow-600/20 text-yellow-400'}`}>
+                                     {displayName.charAt(0)}
+                                  </div>
+                                  <div>
+                                     <p className="font-bold text-gray-200">{displayName}</p>
+                                     <p className="text-[10px] text-gray-500 uppercase">{t.type} {t.nickname ? `• ${t.nickname}` : ''}</p>
+                                  </div>
+                               </div>
+                            </td>
+                            <td className="p-4">
+                               <div className="flex flex-wrap gap-1">
+                                  {(t.goesToSegments || []).map((sid: string) => {
+                                    const seg = trip.segments.find((s: any) => s.id === sid);
+                                    return <span key={sid} className="text-[9px] px-1.5 py-0.5 bg-gray-800 text-gray-500 rounded uppercase font-bold">{seg?.name}</span>
+                                  })}
+                               </div>
+                            </td>
+                            <td className="p-4">
+                               <Badge color={t.isPayer ? 'green' : 'gray'}>{t.isPayer ? 'Pagante' : 'Não pagante'}</Badge>
+                            </td>
+                            <td className="p-4 text-center">
+                               <div className="flex justify-center gap-1">
+                                  {hasErrors && <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" title="Erro crítico" />}
+                                  {hasWarnings && <div className="w-2 h-2 rounded-full bg-amber-500" title="Atenção" />}
+                                  {!hasErrors && !hasWarnings && <span className="text-emerald-500 text-xs">✅</span>}
+                               </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
+          
+          {Object.keys(groupedTravelers).length === 0 && (
              <div className="py-20 text-center text-gray-600 italic">Nenhum viajante encontrado.</div>
           )}
         </div>
@@ -206,11 +216,11 @@ const TravelerList: React.FC<TravelerListProps> = ({ trip, onRefresh, onNavigate
            trip={trip} 
            initialData={editingTraveler || undefined}
            onCancel={() => setIsWizardOpen(false)}
-           onSave={async (t) => {
+           onSave={async (t: any) => {
               const savedTraveler = await dataProvider.saveTraveler(t);
               
               // Salvar documentos
-              if (t.documents && t.documents.length > 0) {
+              if (t.documents && Array.isArray(t.documents) && t.documents.length > 0) {
                 for (const doc of t.documents) {
                   await dataProvider.saveTravelerDocument({
                     ...doc,
