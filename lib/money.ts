@@ -8,7 +8,7 @@ export const Money = {
   fromCents: (cents: number): number => cents / 100,
   
   format: (value: number): string => 
-    value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    (value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
 
   // Garante que um valor tenha no máximo 2 casas decimais antes de processar
   sanitize: (value: number): number => Math.round(value * 100) / 100,

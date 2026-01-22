@@ -272,7 +272,7 @@ const TripWizard: React.FC<TripWizardProps> = ({ onClose, onSave }) => {
               {travelerProfiles
                 .filter(p => {
                   const s = searchTerm.toLowerCase();
-                  return p.name.toLowerCase().includes(s) || 
+                  return (p.full_name || '').toLowerCase().includes(s) || 
                          (p.email && p.email.toLowerCase().includes(s)) ||
                          (p.phone && p.phone.includes(s));
                 })
@@ -302,7 +302,7 @@ const TripWizard: React.FC<TripWizardProps> = ({ onClose, onSave }) => {
                     >
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="font-bold text-white">{profile.name}</p>
+                          <p className="font-bold text-white">{profile.full_name || profile.name}</p>
                           <p className="text-xs text-gray-500">
                             {profile.email || profile.phone || 'Sem contato'}
                           </p>
@@ -352,7 +352,7 @@ const TripWizard: React.FC<TripWizardProps> = ({ onClose, onSave }) => {
               {vendorProfiles
                 .filter(p => {
                   const s = vendorSearchTerm.toLowerCase();
-                  return p.name.toLowerCase().includes(s) || 
+                  return (p.name || '').toLowerCase().includes(s) || 
                          (p.categories && p.categories.some((c: string) => c.toLowerCase().includes(s)));
                 })
                 .map(profile => {
@@ -381,7 +381,7 @@ const TripWizard: React.FC<TripWizardProps> = ({ onClose, onSave }) => {
                     >
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="font-bold text-white">{profile.name}</p>
+                          <p className="font-bold text-white">{profile.name || 'Sem nome'}</p>
                           <div className="flex flex-wrap gap-1 mt-1">
                             {(profile.categories || []).slice(0, 3).map((cat: string) => (
                               <span key={cat} className="text-[9px] font-black uppercase text-indigo-400">{cat}</span>

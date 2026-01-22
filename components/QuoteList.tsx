@@ -142,7 +142,7 @@ const QuoteList: React.FC<QuoteListProps> = ({ trip, vendors, quotes, onRefresh,
               </div>
               
               <div className="mt-auto bg-gray-950 p-4 rounded-xl border border-gray-800 mb-4 group-hover:bg-indigo-600/5 transition-colors">
-                 <p className="text-2xl font-black text-indigo-400">R$ {quote.amountBrl.toLocaleString('pt-BR')}</p>
+                 <p className="text-2xl font-black text-indigo-400">R$ {(quote.amountBrl || 0).toLocaleString('pt-BR')}</p>
                  <p className="text-[10px] text-gray-700 uppercase font-black">Total Calculado</p>
               </div>
             </Card>

@@ -38,7 +38,7 @@ type ViewState =
   | { type: 'trip-dashboard'; tripId: string } // Dashboard de uma viagem específica
   | { type: 'travelers'; tripId?: string } // Viajantes (global ou por viagem)
   | { type: 'traveler-detail'; id: string; tripId?: string }
-  | { type: 'traveler-profile-detail'; profileId: string } // Detalhe do perfil global
+  | { type: 'traveler-profile-detail'; profileId: string; returnTo?: ViewState } // Detalhe do perfil global
   | { type: 'vendors'; tripId?: string } // Fornecedores (global ou por viagem)
   | { type: 'vendor-detail'; id: string; tripId?: string }
   | { type: 'vendor-edit'; id?: string; tripId?: string }
@@ -304,7 +304,7 @@ const App: React.FC = () => {
       case 'travelers': 
         if (view.tripId && trip) {
           // Modo viagem: viajantes vinculados
-          return <TravelerList trip={trip} onRefresh={() => loadData(view.tripId!)} onNavigateToDetail={(id) => setView({ type: 'traveler-detail', id, tripId: view.tripId })} />;
+          return <TravelerList trip={trip} onRefresh={() => loadData(view.tripId!)} onNavigateToDetail={(profileId) => setView({ type: 'traveler-profile-detail', profileId, returnTo: { type: 'travelers', tripId: view.tripId } })} />;
         } else {
           // Modo geral: gerenciar perfis globais
           return <TravelerProfileList onNavigate={(tab) => {
@@ -324,7 +324,7 @@ const App: React.FC = () => {
       case 'traveler-profile-detail':
         return <TravelerProfileDetailPage 
           profileId={view.profileId} 
-          onBack={() => setView({ type: 'travelers' })} 
+          onBack={() => setView(view.returnTo || { type: 'travelers' })} 
           onRefresh={() => {}} 
         />;
 

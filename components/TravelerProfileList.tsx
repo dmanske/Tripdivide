@@ -162,7 +162,11 @@ const TravelerProfileList: React.FC<TravelerProfileListProps> = ({ onNavigate })
       ) : (
         <div className="grid gap-3">
           {filteredProfiles.map(profile => (
-            <Card key={profile.id} className="!p-4 hover:!border-indigo-600/50 transition-all cursor-pointer" onClick={() => handleEdit(profile)}>
+            <Card 
+              key={profile.id} 
+              className="!p-4 hover:!border-indigo-600/50 transition-all cursor-pointer" 
+              onClick={() => onNavigate(`profile-${profile.id}`)}
+            >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${

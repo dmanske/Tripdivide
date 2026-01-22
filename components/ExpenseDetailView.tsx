@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Trip, Expense, ExpenseStatus, Couple, ExpenseSplit, SplitType, Payment, Reimbursement, PaymentMethod } from '../types';
+import { Trip, Expense, ExpenseStatus, Couple, ExpenseSplit, SplitType, Payment, Reimbursement, PaymentMethod, SplitMode, ParticipationMode } from '../types';
 import { Card, Badge, Button, Modal, Input } from './CommonUI';
 import { dataProvider } from '../lib/dataProvider';
 import { Money } from '../lib/money';
 import { formatSupabaseDate } from '../lib/formatters';
+import { ExpenseSplitRulesPanel } from './expense/ExpenseSplitRulesPanel';
 
 interface ExpenseDetailViewProps {
   trip: Trip;
@@ -19,6 +20,13 @@ const ExpenseDetailView: React.FC<ExpenseDetailViewProps> = ({ trip, expense, on
   const [payments, setPayments] = useState<Payment[]>([]);
   const [reimbursements, setReimbursements] = useState<Reimbursement[]>([]);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+
+  // Garantir que expense tem valores válidos
+  const safeExpense = {
+    ...expense,
+    amountBrl: expense.amountBrl || 0,
+    amountUsd: expense.amountUsd || 0
+  };
 
   useEffect(() => {
     loadData();
@@ -35,8 +43,8 @@ const ExpenseDetailView: React.FC<ExpenseDetailViewProps> = ({ trip, expense, on
     setReimbursements(rList.filter(r => r.expenseId === expense.id));
   };
 
-  const totalPaid = useMemo(() => payments.reduce((sum, p) => sum + p.paidAmountBrl, 0), [payments]);
-  const paymentProgress = Math.min(100, Math.round((totalPaid / expense.amountBrl) * 100));
+  const totalPaid = useMemo(() => payments.reduce((sum, p) => sum + (p.paidAmountBrl || 0), 0), [payments]);
+  const paymentProgress = Math.min(100, Math.round((totalPaid / (safeExpense.amountBrl || 1)) * 100));
 
   const handleRegisterPayment = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -171,26 +179,42 @@ const ExpenseDetailView: React.FC<ExpenseDetailViewProps> = ({ trip, expense, on
 
         {activeTab === 'split' && (
            <div className="space-y-6 animate-in fade-in duration-300">
-              <div className="flex items-center justify-between">
-                 <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest">Como este custo é dividido?</h3>
-                 <div className="flex gap-2">
-                    <Button variant="ghost" className="text-[10px]" onClick={() => handleUpdateSplitType(SplitType.EQUAL)}>Igualitário</Button>
-                    <Button variant="ghost" className="text-[10px]" onClick={() => handleUpdateSplitType(SplitType.PER_PERSON)}>Por Pessoa</Button>
-                 </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                 {splits.map(s => {
-                   const couple = trip.couples.find(c => c.id === s.coupleId);
-                   return (
-                     <Card key={s.id} className="text-center group border-2 hover:border-indigo-500 transition-all">
+              {/* Painel de Regras de Split */}
+              <ExpenseSplitRulesPanel
+                tripId={trip.id}
+                expenseId={expense.id}
+                expenseTotal={expense.amountBrl}
+                currentSplitMode={expense.splitMode}
+                currentParticipationMode={expense.participationMode || ParticipationMode.INHERIT}
+                onUpdated={() => {
+                  loadData();
+                  onRefresh();
+                }}
+              />
+
+              {/* Linha de separação */}
+              <div className="border-t border-gray-800 pt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest">Divisão Atual</h3>
+                  <div className="flex gap-2">
+                    <Button variant="ghost" className="text-[10px]" onClick={() => handleUpdateSplitType(SplitType.EQUAL)}>Igualitário (Legado)</Button>
+                    <Button variant="ghost" className="text-[10px]" onClick={() => handleUpdateSplitType(SplitType.PER_PERSON)}>Por Pessoa (Legado)</Button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {splits.map(s => {
+                    const couple = trip.couples.find(c => c.id === s.coupleId);
+                    return (
+                      <Card key={s.id} className="text-center group border-2 hover:border-indigo-500 transition-all">
                         <p className="text-[10px] text-gray-500 uppercase font-black mb-1">{couple?.name}</p>
                         <p className="text-2xl font-black text-white">R$ {Money.format(s.amountBrl)}</p>
                         <Badge color="indigo" className="mt-2">
-                           {s.splitType === SplitType.EQUAL ? 'Igual' : `${s.value} Pessoas`}
+                          {s.splitType === SplitType.EQUAL ? 'Igual' : `${s.value} Pessoas`}
                         </Badge>
-                     </Card>
-                   );
-                 })}
+                      </Card>
+                    );
+                  })}
+                </div>
               </div>
            </div>
         )}

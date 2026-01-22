@@ -3,6 +3,9 @@ import { Trip, Quote, Expense } from '../types';
 import { Button, Card } from './CommonUI';
 import { ICONS } from '../constants';
 import { dataProvider } from '../lib/dataProvider';
+import TripSetupChecklist from './TripSetupChecklist';
+import LinkTravelersModal from './LinkTravelersModal';
+import LinkVendorsModal from './LinkVendorsModal';
 
 interface TripDashboardProps {
   trip: Trip;
@@ -15,6 +18,8 @@ interface TripDashboardProps {
 const TripDashboard: React.FC<TripDashboardProps> = ({ trip, quotes, expenses, onNavigate, onRefresh }) => {
   const [travelers, setTravelers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showLinkTravelers, setShowLinkTravelers] = useState(false);
+  const [showLinkVendors, setShowLinkVendors] = useState(false);
 
   useEffect(() => {
     loadTravelers();
@@ -90,6 +95,15 @@ const TripDashboard: React.FC<TripDashboardProps> = ({ trip, quotes, expenses, o
 
   return (
     <div className="space-y-6">
+      {/* Checklist de Setup */}
+      <TripSetupChecklist
+        trip={trip}
+        onNavigate={onNavigate}
+        onOpenLinkTravelers={() => setShowLinkTravelers(true)}
+        onOpenLinkVendors={() => setShowLinkVendors(true)}
+        onRefresh={onRefresh}
+      />
+
       {/* Header */}
       <div className="bg-gradient-to-r from-indigo-600 to-cyan-500 rounded-xl p-6 text-white">
         <h1 className="text-3xl font-black uppercase tracking-tight mb-2">{trip.name}</h1>
@@ -276,6 +290,29 @@ const TripDashboard: React.FC<TripDashboardProps> = ({ trip, quotes, expenses, o
             ))}
           </div>
         </Card>
+      )}
+
+      {/* Modais */}
+      {showLinkTravelers && (
+        <LinkTravelersModal
+          tripId={trip.id}
+          onClose={() => setShowLinkTravelers(false)}
+          onLinked={() => {
+            setShowLinkTravelers(false);
+            onRefresh();
+          }}
+        />
+      )}
+
+      {showLinkVendors && (
+        <LinkVendorsModal
+          tripId={trip.id}
+          onClose={() => setShowLinkVendors(false)}
+          onLinked={() => {
+            setShowLinkVendors(false);
+            onRefresh();
+          }}
+        />
       )}
     </div>
   );

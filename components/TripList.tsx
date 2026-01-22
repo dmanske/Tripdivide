@@ -15,15 +15,23 @@ const TripList: React.FC<TripListProps> = ({ onNavigateToTrip, onRefresh }) => {
   const [loading, setLoading] = useState(true);
   const [showWizard, setShowWizard] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [showResetDemo, setShowResetDemo] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const loadTrips = async () => {
     setLoading(true);
     try {
+      console.log('🔍 TripList: Carregando viagens...');
       const allTrips = await supabaseDataProvider.getTrips();
-      setTrips(allTrips.filter((t: any) => t.status === 'active' || t.status === 'archived'));
-      setDrafts(allTrips.filter((t: any) => t.status === 'draft'));
+      console.log('✅ TripList: Viagens recebidas:', allTrips);
+      const activeTrips = allTrips.filter((t: any) => t.status === 'active' || t.status === 'archived');
+      const draftTrips = allTrips.filter((t: any) => t.status === 'draft');
+      console.log('📊 TripList: Ativas:', activeTrips.length, 'Rascunhos:', draftTrips.length);
+      setTrips(activeTrips);
+      setDrafts(draftTrips);
     } catch (error) {
-      console.error('Erro ao carregar viagens:', error);
+      console.error('❌ TripList: Erro ao carregar viagens:', error);
     } finally {
       setLoading(false);
     }
@@ -64,6 +72,28 @@ const TripList: React.FC<TripListProps> = ({ onNavigateToTrip, onRefresh }) => {
     }
   };
 
+  const handleResetDemo = async () => {
+    setIsResetting(true);
+    try {
+      const demoTripId = await supabaseDataProvider.resetDemo();
+      setShowResetDemo(false);
+      setSuccessMessage('Demo recriado com sucesso!');
+      setTimeout(() => setSuccessMessage(null), 3000);
+      await loadTrips();
+      onRefresh();
+      
+      // Abrir viagem demo automaticamente
+      await supabaseDataProvider.setActiveTrip(demoTripId);
+      onNavigateToTrip(demoTripId, true);
+    } catch (error) {
+      console.error('Erro ao resetar demo:', error);
+      setSuccessMessage('Erro ao resetar demo');
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   const handleSetActive = async (tripId: string) => {
     try {
       await supabaseDataProvider.setActiveTrip(tripId);
@@ -93,16 +123,32 @@ const TripList: React.FC<TripListProps> = ({ onNavigateToTrip, onRefresh }) => {
 
   return (
     <div className="space-y-6">
+      {/* Success Message */}
+      {successMessage && (
+        <div className="fixed top-4 right-4 bg-emerald-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-in slide-in-from-top">
+          {successMessage}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-black text-white uppercase tracking-tight">Minhas Viagens</h1>
           <p className="text-sm text-gray-500 mt-1">Gerencie todas as suas viagens</p>
         </div>
-        <Button onClick={() => setShowWizard(true)} className="bg-indigo-600 hover:bg-indigo-700">
-          <ICONS.Plus className="w-4 h-4 mr-2" />
-          Nova Viagem
-        </Button>
+        <div className="flex gap-3">
+          <Button 
+            onClick={() => setShowResetDemo(true)} 
+            variant="outline"
+            className="border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+          >
+            🎬 Reset Demo
+          </Button>
+          <Button onClick={() => setShowWizard(true)} className="bg-indigo-600 hover:bg-indigo-700">
+            <ICONS.Plus className="w-4 h-4 mr-2" />
+            Nova Viagem
+          </Button>
+        </div>
       </div>
 
       {/* Rascunhos */}
@@ -244,6 +290,55 @@ const TripList: React.FC<TripListProps> = ({ onNavigateToTrip, onRefresh }) => {
           </div>
         </Modal>
       )}
+
+      {/* Modal Reset Demo */}
+      <Modal isOpen={showResetDemo} onClose={() => setShowResetDemo(false)} title="Reset Demo">
+        <div className="space-y-4">
+          <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
+            <p className="text-lg font-bold text-white mb-2">🎬 Recriar Cenário de Demonstração</p>
+            <p className="text-gray-300 text-sm">
+              Isso vai criar um cenário completo de demonstração no seu banco de dados com:
+            </p>
+          </div>
+          
+          <div className="bg-gray-800/50 rounded-lg p-4 space-y-2">
+            <p className="text-sm font-bold text-gray-300 mb-2">O que será criado:</p>
+            <ul className="text-sm text-gray-400 space-y-1 ml-4">
+              <li>• 1 viagem "Orlando & Miami (Demo)"</li>
+              <li>• 7 viajantes (3 casais + 1 criança)</li>
+              <li>• 6 fornecedores globais</li>
+              <li>• 8 cotações (com e sem fornecedor)</li>
+              <li>• 3 despesas fechadas</li>
+              <li>• Pagamentos e divisões</li>
+            </ul>
+          </div>
+
+          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+            <p className="text-sm text-yellow-300">
+              ⚠️ <strong>Atenção:</strong> Seus dados atuais serão removidos. Esta ação não pode ser desfeita.
+            </p>
+          </div>
+
+          <div className="flex gap-3 pt-4 border-t border-gray-800">
+            <Button 
+              variant="ghost" 
+              onClick={() => setShowResetDemo(false)} 
+              className="flex-1"
+              disabled={isResetting}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              variant="primary" 
+              onClick={handleResetDemo} 
+              className="flex-1 bg-purple-600 hover:bg-purple-700"
+              disabled={isResetting}
+            >
+              {isResetting ? 'Criando...' : 'Recriar Demo'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

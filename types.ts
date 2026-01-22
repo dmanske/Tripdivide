@@ -27,6 +27,19 @@ export enum SplitType {
   PER_PERSON = 'per_person'
 }
 
+export enum SplitMode {
+  BY_COUPLE = 'by_couple',
+  PER_PERSON = 'per_person',
+  CUSTOM = 'custom'
+}
+
+export enum ParticipationMode {
+  INHERIT = 'inherit',
+  ALL = 'all',
+  PAYING_ONLY = 'paying_only',
+  MANUAL = 'manual'
+}
+
 export enum PaymentMethod {
   PIX = 'pix',
   CREDIT_CARD = 'card',
@@ -58,7 +71,10 @@ export interface Attachment {
 export interface ExpenseSplit {
   id: string;
   expenseId: string;
-  coupleId: string;
+  tripId: string;
+  coupleId?: string; // Quando participant_type = 'couple'
+  tripTravelerId?: string; // Quando participant_type = 'traveler'
+  participantType: 'traveler' | 'couple';
   splitType: SplitType;
   value?: number; // percentual ou valor fixo ou peso
   amountBrl: number;
@@ -112,6 +128,11 @@ export interface Expense {
   attachments: Attachment[];
   createdAt: string;
   updatedAt: string;
+  
+  // Regras de split por despesa
+  splitMode?: SplitMode; // null = herda da viagem
+  participationMode?: ParticipationMode; // 'inherit' | 'all' | 'paying_only' | 'manual'
+  includeChildrenDefault?: boolean; // Sugestão de UI (não é fonte da verdade)
   
   // Detalhes herdados das cotações
   hotelDetails?: any;
@@ -168,6 +189,22 @@ export interface Traveler {
   documents?: TravelerDocument[]; // Nova estrutura
 }
 
+// Interface para vínculos de viajantes (td_trip_travelers)
+export interface TripTraveler {
+  id: string;
+  tripId: string;
+  travelerProfileId: string;
+  coupleId?: string;
+  type: TravelerType;
+  isPayer: boolean;
+  countInSplit: boolean; // Se entra na divisão por pessoa
+  goesToSegments: string[];
+  status: 'Ativo' | 'Arquivado';
+  createdAt: string;
+  updatedAt: string;
+  profile?: TravelerProfile; // Join com perfil global
+}
+
 export interface TravelerDocument {
   id?: string;
   travelerId: string;
@@ -203,6 +240,8 @@ export interface Trip {
   couples: Couple[];
   categories: string[];
   consensusRule: '2/3' | '3/3';
+  defaultSplitMode?: SplitMode; // Modo padrão de divisão
+  defaultParticipationMode?: ParticipationMode; // Modo padrão de participação
 }
 
 export interface Quote {
@@ -308,4 +347,59 @@ export interface VendorQuoteRequest {
   segmentId: string;
   message: string;
   createdAt: string;
+}
+
+// Perfis globais
+export interface TravelerProfile {
+  id: string;
+  userId: string;
+  fullName: string;
+  nickname?: string;
+  phone?: string;
+  email?: string;
+  birthDate?: string;
+  canDrive?: boolean;
+  primaryDocType?: DocType;
+  primaryDocNumber?: string;
+  primaryDocExpiry?: string;
+  notes?: string;
+  tags?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Documentos vinculados aos perfis globais (reutilizáveis entre viagens)
+export interface TravelerProfileDocument {
+  id: string;
+  travelerProfileId: string;
+  docType: 'Passaporte' | 'RG' | 'CPF' | 'CNH' | 'Visto' | 'ESTA' | 'Outro';
+  docCategory?: 'identity' | 'entry';
+  docNumberLast4?: string; // Últimos 4 dígitos para exibição segura
+  docExpiry?: string;
+  issueDate?: string;
+  issuingCountry?: string;
+  issuerState?: string;
+  issuerAgency?: string;
+  isPrimary: boolean;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VendorProfile {
+  id: string;
+  userId: string;
+  name: string;
+  legalName?: string;
+  categories: string[];
+  contacts: any[];
+  websiteUrl?: string;
+  instagramUrl?: string;
+  tags: string[];
+  riskFlags: string[];
+  slaNotes?: string;
+  paymentTermsDefault?: any;
+  cancellationPolicyNotes?: string;
+  createdAt: string;
+  updatedAt: string;
 }

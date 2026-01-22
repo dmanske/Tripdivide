@@ -222,6 +222,15 @@ const TravelerList: React.FC<TravelerListProps> = ({ trip, onRefresh, onNavigate
                             <td className="p-4 text-center">
                                <div className="flex justify-center gap-2">
                                   <Button 
+                                    onClick={(e) => { 
+                                      e.stopPropagation(); 
+                                      onNavigateToDetail(profile.id); 
+                                    }} 
+                                    className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 text-xs"
+                                  >
+                                    Ver Perfil
+                                  </Button>
+                                  <Button 
                                     onClick={(e) => { e.stopPropagation(); setEditingTripTraveler(tt); }} 
                                     className="bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 text-xs"
                                   >

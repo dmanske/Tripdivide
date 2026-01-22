@@ -33,7 +33,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ trip, expenses, onRefresh, on
       const matchesCategory = filters.category === 'all' || e.category === filters.category;
       const matchesStatus = filters.status === 'all' || e.status === filters.status;
       return matchesSearch && matchesSegment && matchesCategory && matchesStatus;
-    }).sort((a,b) => b.createdAt.localeCompare(a.createdAt));
+    }).sort((a,b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
   }, [expenses, filters]);
 
   return (
@@ -129,8 +129,8 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ trip, expenses, onRefresh, on
                   )}
                 </td>
                 <td className="p-4">
-                  <div className="font-black text-white">R$ {e.amountBrl.toLocaleString('pt-BR')}</div>
-                  <div className="text-[10px] text-gray-600">{e.currency} {e.amount.toLocaleString()} ({e.exchangeRate})</div>
+                  <div className="font-black text-white">R$ {(e.amountBrl || 0).toLocaleString('pt-BR')}</div>
+                  <div className="text-[10px] text-gray-600">{e.currency} {(e.amount || 0).toLocaleString()} ({e.exchangeRate})</div>
                 </td>
                 <td className="p-4">
                   <Badge color={e.status === ExpenseStatus.PAID ? 'green' : e.status === ExpenseStatus.CONFIRMED ? 'yellow' : 'gray'}>

@@ -79,7 +79,7 @@ const PaymentsPage: React.FC<PaymentsPageProps> = ({ trip }) => {
                      <td className="p-4 font-bold text-gray-200 text-sm">{couple?.name}</td>
                      <td className="p-4 text-gray-400 text-sm">{expense?.title || 'Avulso'}</td>
                      <td className="p-4"><Badge color="indigo">{p.method.toUpperCase()}</Badge></td>
-                     <td className="p-4 text-right font-black text-emerald-400">R$ {p.paidAmountBrl.toLocaleString('pt-BR')}</td>
+                     <td className="p-4 text-right font-black text-emerald-400">R$ {(p.paidAmountBrl || 0).toLocaleString('pt-BR')}</td>
                   </tr>
                 );
               })}

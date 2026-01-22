@@ -122,7 +122,7 @@ const QuoteDetailView: React.FC<QuoteDetailViewProps> = ({ trip, quote, onEdit, 
          <div className="flex gap-4">
             <div className="text-right">
                <p className="text-[10px] font-black text-gray-600 uppercase">Total BRL</p>
-               <p className="text-3xl font-black text-indigo-400">R$ {quote.amountBrl.toLocaleString('pt-BR')}</p>
+               <p className="text-3xl font-black text-indigo-400">R$ {(quote.amountBrl || 0).toLocaleString('pt-BR')}</p>
             </div>
          </div>
       </header>
