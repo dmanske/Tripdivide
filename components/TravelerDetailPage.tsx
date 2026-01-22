@@ -605,7 +605,7 @@ const DocumentRow: React.FC<{ doc: any; onEdit: () => void }> = ({ doc, onEdit }
   );
 };
 
-// Componente de seção de documentos com tabela premium
+// Componente de seção de documentos com tabela premium refinada
 const DocumentSection: React.FC<{ 
   title: string; 
   count: number; 
@@ -621,37 +621,69 @@ const DocumentSection: React.FC<{
     const expiry = new Date(expiryDate);
     const daysUntil = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     
-    if (daysUntil < 0) return { color: 'bg-red-600/20 text-red-400 border-red-600/30', label: 'Vencido', icon: '⚠️' };
-    if (daysUntil <= 30) return { color: 'bg-red-600/20 text-red-400 border-red-600/30', label: `${daysUntil}d`, icon: '⚠️' };
-    if (daysUntil <= 90) return { color: 'bg-yellow-600/20 text-yellow-400 border-yellow-600/30', label: `${daysUntil}d`, icon: '⏰' };
-    return { color: '', label: '', icon: '✓' };
+    if (daysUntil < 0) return { 
+      color: 'bg-red-600/20 text-red-400 border-red-600/30', 
+      textColor: 'text-red-400',
+      label: 'Vencido'
+    };
+    if (daysUntil <= 30) return { 
+      color: 'bg-red-600/20 text-red-400 border-red-600/30', 
+      textColor: 'text-red-400',
+      label: `Vence em ${daysUntil}d`
+    };
+    if (daysUntil <= 90) return { 
+      color: 'bg-yellow-600/20 text-yellow-400 border-yellow-600/30', 
+      textColor: 'text-yellow-400',
+      label: `Vence em ${daysUntil}d`
+    };
+    return null; // OK - não mostra nada
   };
 
   const getIssuer = (doc: any) => {
     return doc.issuerCountry || doc.issuerState || doc.regionOrCountry || '—';
   };
 
-  const getDetails = (doc: any) => {
+  const getSubtext = (doc: any) => {
     if (doc.docType === 'Visto' && doc.visaCategory) return doc.visaCategory;
     if (doc.docType === 'CNH' && doc.licenseCategory) return `Cat. ${doc.licenseCategory}`;
+    if (doc.docType === 'RG' && (doc.issuerAgency || doc.issuerState)) {
+      const parts = [];
+      if (doc.issuerAgency) parts.push(doc.issuerAgency);
+      if (doc.issuerState) parts.push(doc.issuerState);
+      return parts.join('/');
+    }
     if (doc.docType === 'Outro' && doc.customLabel) return doc.customLabel;
     if (doc.docType === 'Visto' && doc.entryType) return doc.entryType === 'multiple' ? 'Múltiplas' : 'Única';
     return null;
   };
 
+  // Contar alertas (documentos vencidos ou vencendo)
+  const alertCount = documents.filter(doc => {
+    const status = getExpiryStatus(doc.expiryDate);
+    return status !== null;
+  }).length;
+
   return (
-    <div className="border border-gray-800 rounded-lg overflow-hidden">
-      {/* Header colapsável */}
+    <div className="border border-gray-800 rounded-xl overflow-hidden">
+      {/* Header premium colapsável */}
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
-        className="w-full px-4 py-2 bg-gray-900/50 flex items-center justify-between hover:bg-gray-900 transition-colors"
+        className="w-full px-5 py-3 bg-gray-900/50 flex items-center justify-between hover:bg-gray-900 transition-all group"
       >
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-black text-gray-400 uppercase">{title}</span>
-          <span className="text-[10px] px-1.5 py-0.5 bg-gray-800 text-gray-500 rounded font-bold">{count}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-black text-gray-300 uppercase tracking-wide">{title}</span>
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <span>{count} {count === 1 ? 'item' : 'itens'}</span>
+            {alertCount > 0 && (
+              <>
+                <span>•</span>
+                <span className="text-amber-400 font-bold">{alertCount} {alertCount === 1 ? 'alerta' : 'alertas'}</span>
+              </>
+            )}
+          </div>
         </div>
         <svg 
-          className={`w-4 h-4 text-gray-600 transition-transform ${isCollapsed ? '' : 'rotate-180'}`} 
+          className={`w-4 h-4 text-gray-600 transition-transform duration-200 ${isCollapsed ? '' : 'rotate-180'}`} 
           fill="none" 
           viewBox="0 0 24 24" 
           stroke="currentColor"
@@ -660,78 +692,72 @@ const DocumentSection: React.FC<{
         </svg>
       </button>
 
-      {/* Tabela */}
+      {/* Tabela - apenas 4 colunas: TIPO | EMISSOR | NÚMERO | VALIDADE */}
       {!isCollapsed && (
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-900/30 border-b border-gray-800">
               <tr>
-                <th className="px-4 py-2 text-left text-[10px] font-black text-gray-500 uppercase">Tipo</th>
-                <th className="px-4 py-2 text-left text-[10px] font-black text-gray-500 uppercase">Emissor</th>
-                <th className="px-4 py-2 text-left text-[10px] font-black text-gray-500 uppercase">Número</th>
-                <th className="px-4 py-2 text-left text-[10px] font-black text-gray-500 uppercase">Validade</th>
-                <th className="px-4 py-2 text-center text-[10px] font-black text-gray-500 uppercase">Status</th>
-                <th className="px-4 py-2 text-center text-[10px] font-black text-gray-500 uppercase w-20">Ações</th>
+                <th className="px-5 py-2.5 text-left text-[10px] font-black text-gray-500 uppercase tracking-wider">Tipo</th>
+                <th className="px-5 py-2.5 text-left text-[10px] font-black text-gray-500 uppercase tracking-wider">Emissor</th>
+                <th className="px-5 py-2.5 text-left text-[10px] font-black text-gray-500 uppercase tracking-wider">Número</th>
+                <th className="px-5 py-2.5 text-left text-[10px] font-black text-gray-500 uppercase tracking-wider">Validade</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800">
               {documents.map(doc => {
                 const status = getExpiryStatus(doc.expiryDate);
                 const issuer = getIssuer(doc);
-                const details = getDetails(doc);
+                const subtext = getSubtext(doc);
 
                 return (
                   <tr 
                     key={doc.id} 
                     onClick={() => onEdit(doc)}
-                    className="hover:bg-gray-900/30 transition-colors cursor-pointer group"
+                    className="hover:bg-gray-900/40 transition-colors cursor-pointer group"
                   >
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">{DOC_ICONS[doc.docType] || '📄'}</span>
+                    {/* TIPO */}
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-xl">{DOC_ICONS[doc.docType] || '📄'}</span>
                         <div>
-                          <p className="text-xs font-bold text-white">{doc.docType}</p>
-                          {details && <p className="text-[10px] text-gray-500">{details}</p>}
+                          <p className="text-sm font-bold text-white">{doc.docType}</p>
+                          {subtext && <p className="text-[10px] text-gray-500 mt-0.5">{subtext}</p>}
                           {doc.isPrimary && (
-                            <span className="inline-block mt-0.5 text-[8px] px-1.5 py-0.5 bg-emerald-600/20 text-emerald-400 rounded uppercase font-bold border border-emerald-600/30">
+                            <span className="inline-block mt-1 text-[8px] px-1.5 py-0.5 bg-emerald-600/20 text-emerald-400 rounded uppercase font-bold border border-emerald-600/30">
                               Principal
                             </span>
                           )}
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3">
-                      <p className="text-xs text-gray-300">{issuer}</p>
+
+                    {/* EMISSOR */}
+                    <td className="px-5 py-3.5">
+                      <p className="text-sm text-gray-300">{issuer}</p>
                     </td>
-                    <td className="px-4 py-3">
-                      <p className="text-xs font-mono text-white">{formatDocNumber(doc.docNumber, doc.docType)}</p>
+
+                    {/* NÚMERO */}
+                    <td className="px-5 py-3.5">
+                      <p className="text-sm font-mono text-white">{formatDocNumber(doc.docNumber, doc.docType)}</p>
                     </td>
-                    <td className="px-4 py-3">
-                      <p className="text-xs text-gray-300">
-                        {doc.expiryDate ? formatSupabaseDate(doc.expiryDate) : '—'}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {status && status.label ? (
-                        <span className={`inline-block text-[10px] px-2 py-1 rounded uppercase font-bold border ${status.color}`}>
-                          {status.icon} {status.label}
-                        </span>
+
+                    {/* VALIDADE */}
+                    <td className="px-5 py-3.5">
+                      {doc.expiryDate ? (
+                        <div className="flex items-center gap-2">
+                          <p className={`text-sm ${status ? status.textColor : 'text-gray-300'}`}>
+                            {formatSupabaseDate(doc.expiryDate)}
+                          </p>
+                          {status && (
+                            <span className={`inline-block text-[10px] px-2 py-0.5 rounded uppercase font-bold border ${status.color}`}>
+                              {status.label}
+                            </span>
+                          )}
+                        </div>
                       ) : (
-                        <span className="text-emerald-500 text-sm">{status?.icon}</span>
+                        <p className="text-sm text-gray-600 italic">Sem validade</p>
                       )}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onEdit(doc);
-                        }}
-                        className="text-gray-600 hover:text-indigo-400 transition-colors opacity-0 group-hover:opacity-100"
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                        </svg>
-                      </button>
                     </td>
                   </tr>
                 );
