@@ -333,6 +333,9 @@ export const supabaseDataProvider = {
 
   // ==================== TRAVELER DOCUMENTS ====================
   getTravelerDocuments: async (travelerId: string) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('Não autenticado');
+
     const { data, error } = await supabase
       .from('td_traveler_documents')
       .select('*')
@@ -341,81 +344,187 @@ export const supabaseDataProvider = {
 
     if (error) throw error;
     
-    return (data || []).map(d => ({
-      id: d.id,
-      travelerId: d.traveler_id,
-      docType: d.doc_type,
-      docNumber: d.doc_number,
-      docNumberLast4: d.doc_number_last4,
-      docExpiry: d.doc_expiry,
-      issuingCountry: d.issuing_country,
-      notes: d.notes,
-      createdAt: d.created_at,
-      updatedAt: d.updated_at
-    }));
+    // Descriptografar todos os documentos para mostrar número completo
+    const documentsWithDecrypted = await Promise.all(
+      (data || []).map(async (d) => {
+        try {
+          // Descriptografar via Edge Function
+          const response = await fetch(`${supabase.supabaseUrl}/functions/v1/encrypt-document`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              action: 'decrypt',
+              documentId: d.id
+            })
+          });
+
+          const result = await response.json();
+          const docNumber = result.success ? result.docNumber : ('••••' + d.doc_number_last4);
+
+          return {
+            id: d.id,
+            travelerId: d.traveler_id,
+            docType: d.doc_type,
+            docCategory: d.doc_category,
+            docNumber: docNumber, // Número completo descriptografado
+            docNumberLast4: d.doc_number_last4,
+            issuerCountry: d.issuer_country,
+            issuerState: d.issuer_state,
+            issuerAgency: d.issuer_agency,
+            issuerPlace: d.issuer_place,
+            regionOrCountry: d.region_or_country,
+            issueDate: d.issue_date,
+            expiryDate: d.expiry_date,
+            visaCategory: d.visa_category,
+            entryType: d.entry_type,
+            stayDurationDays: d.stay_duration_days,
+            licenseCategory: d.license_category,
+            customLabel: d.custom_label,
+            passportDocumentId: d.passport_document_id,
+            isPrimary: d.is_primary,
+            notes: d.notes,
+            createdAt: d.created_at,
+            updatedAt: d.updated_at
+          };
+        } catch (err) {
+          // Se falhar a descriptografia, mostrar mascarado
+          return {
+            id: d.id,
+            travelerId: d.traveler_id,
+            docType: d.doc_type,
+            docCategory: d.doc_category,
+            docNumber: '••••' + d.doc_number_last4,
+            docNumberLast4: d.doc_number_last4,
+            issuerCountry: d.issuer_country,
+            issuerState: d.issuer_state,
+            issuerAgency: d.issuer_agency,
+            issuerPlace: d.issuer_place,
+            regionOrCountry: d.region_or_country,
+            issueDate: d.issue_date,
+            expiryDate: d.expiry_date,
+            visaCategory: d.visa_category,
+            entryType: d.entry_type,
+            stayDurationDays: d.stay_duration_days,
+            licenseCategory: d.license_category,
+            customLabel: d.custom_label,
+            passportDocumentId: d.passport_document_id,
+            isPrimary: d.is_primary,
+            notes: d.notes,
+            createdAt: d.created_at,
+            updatedAt: d.updated_at
+          };
+        }
+      })
+    );
+
+    return documentsWithDecrypted;
   },
 
   saveTravelerDocument: async (doc: any) => {
-    if (doc.id) {
-      // Update
-      const { data, error } = await supabase
-        .from('td_traveler_documents')
-        .update({
-          doc_type: doc.docType,
-          doc_number: doc.docNumber,
-          doc_expiry: doc.docExpiry,
-          issuing_country: doc.issuingCountry,
-          notes: doc.notes,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', doc.id)
-        .select()
-        .single();
+    // Usar Edge Function para criptografar
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('Não autenticado');
 
-      if (error) throw error;
-      
-      return {
-        id: data.id,
-        travelerId: data.traveler_id,
-        docType: data.doc_type,
-        docNumber: data.doc_number,
-        docNumberLast4: data.doc_number_last4,
-        docExpiry: data.doc_expiry,
-        issuingCountry: data.issuing_country,
-        notes: data.notes,
-        createdAt: data.created_at,
-        updatedAt: data.updated_at
-      };
-    } else {
-      // Insert
-      const { data, error } = await supabase
-        .from('td_traveler_documents')
-        .insert({
-          traveler_id: doc.travelerId,
-          doc_type: doc.docType,
-          doc_number: doc.docNumber,
-          doc_expiry: doc.docExpiry,
-          issuing_country: doc.issuingCountry,
-          notes: doc.notes
-        })
-        .select()
-        .single();
+    console.log('📤 Enviando documento para criptografia:', {
+      travelerId: doc.travelerId,
+      docType: doc.docType,
+      docCategory: doc.docCategory,
+      docNumber: doc.docNumber ? '***' + doc.docNumber.slice(-4) : 'vazio'
+    });
 
-      if (error) throw error;
-      
-      return {
-        id: data.id,
-        travelerId: data.traveler_id,
-        docType: data.doc_type,
-        docNumber: data.doc_number,
-        docNumberLast4: data.doc_number_last4,
-        docExpiry: data.doc_expiry,
-        issuingCountry: data.issuing_country,
-        notes: data.notes,
-        createdAt: data.created_at,
-        updatedAt: data.updated_at
-      };
+    const response = await fetch(`${supabase.supabaseUrl}/functions/v1/encrypt-document`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        action: 'encrypt',
+        travelerId: doc.travelerId,
+        docType: doc.docType,
+        docCategory: doc.docCategory || (doc.docType === 'Visto' || doc.docType === 'ESTA' ? 'entry' : 'identity'),
+        docNumber: doc.docNumber,
+        issuerCountry: doc.issuerCountry,
+        issuerState: doc.issuerState,
+        issuerAgency: doc.issuerAgency,
+        issuerPlace: doc.issuerPlace,
+        regionOrCountry: doc.regionOrCountry,
+        issueDate: doc.issueDate,
+        expiryDate: doc.docExpiry,
+        visaCategory: doc.visaCategory,
+        entryType: doc.entryType,
+        stayDurationDays: doc.stayDurationDays,
+        licenseCategory: doc.licenseCategory,
+        customLabel: doc.customLabel,
+        passportDocumentId: doc.passportDocumentId,
+        isPrimary: doc.isPrimary,
+        notes: doc.notes,
+        documentId: doc.id
+      })
+    });
+
+    const result = await response.json();
+    
+    console.log('📥 Resposta da Edge Function:', result);
+    
+    if (!result.success) {
+      console.error('❌ Erro ao salvar documento:', result.error);
+      throw new Error(result.error || 'Erro ao salvar documento');
     }
+
+    console.log('✅ Documento salvo com sucesso! ID:', result.documentId);
+
+    // Retornar com número completo (mantido em memória no frontend)
+    return {
+      id: result.documentId,
+      travelerId: doc.travelerId,
+      docType: doc.docType,
+      docCategory: doc.docCategory,
+      docNumber: doc.docNumber, // Número completo no frontend
+      docNumberLast4: doc.docNumber.replace(/[^A-Za-z0-9]/g, '').slice(-4),
+      issuerCountry: doc.issuerCountry,
+      issuerState: doc.issuerState,
+      issuerAgency: doc.issuerAgency,
+      issuerPlace: doc.issuerPlace,
+      regionOrCountry: doc.regionOrCountry,
+      issueDate: doc.issueDate,
+      expiryDate: doc.docExpiry,
+      visaCategory: doc.visaCategory,
+      entryType: doc.entryType,
+      stayDurationDays: doc.stayDurationDays,
+      licenseCategory: doc.licenseCategory,
+      customLabel: doc.customLabel,
+      passportDocumentId: doc.passportDocumentId,
+      isPrimary: doc.isPrimary,
+      notes: doc.notes,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+  },
+
+  decryptTravelerDocument: async (documentId: string) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('Não autenticado');
+
+    const response = await fetch(`${supabase.supabaseUrl}/functions/v1/encrypt-document`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        action: 'decrypt',
+        documentId
+      })
+    });
+
+    const result = await response.json();
+    if (!result.success) throw new Error(result.error);
+
+    return result.docNumber;
   },
 
   deleteTravelerDocument: async (id: string) => {
@@ -425,6 +534,154 @@ export const supabaseDataProvider = {
       .eq('id', id);
 
     if (error) throw error;
+  },
+
+  // ==================== RASCUNHOS ====================
+  saveTravelerDraft: async (traveler: Partial<Traveler>) => {
+    const draftData = {
+      ...traveler,
+      is_draft: true
+    };
+    return supabaseDataProvider.saveTraveler(draftData);
+  },
+
+  finalizeTravelerDraft: async (travelerId: string) => {
+    const { error } = await supabase
+      .from('td_travelers')
+      .update({ is_draft: false })
+      .eq('id', travelerId);
+
+    if (error) throw error;
+  },
+
+  getTravelerDrafts: async (tripId: string) => {
+    const { data, error } = await supabase
+      .from('td_travelers')
+      .select('*')
+      .eq('trip_id', tripId)
+      .eq('is_draft', true)
+      .eq('status', 'Ativo')
+      .order('updated_at', { ascending: false });
+
+    if (error) throw error;
+
+    return (data || []).map(t => ({
+      id: t.id,
+      tripId: t.trip_id,
+      coupleId: t.couple_id,
+      fullName: t.full_name,
+      documentName: t.document_name,
+      nickname: t.nickname,
+      type: t.type,
+      goesToSegments: t.goes_to_segments || [],
+      isPayer: t.is_payer,
+      status: t.status,
+      createdAt: t.created_at,
+      updatedAt: t.updated_at,
+      phone: t.phone,
+      email: t.email,
+      birthDate: t.birth_date,
+      canDrive: t.can_drive,
+      docType: t.doc_type,
+      docNumber: t.doc_number,
+      docExpiry: t.doc_expiry,
+      tags: t.tags,
+      notes: t.notes,
+      isDraft: true
+    }));
+  },
+
+  discardTravelerDraft: async (travelerId: string) => {
+    const { error } = await supabase
+      .from('td_travelers')
+      .delete()
+      .eq('id', travelerId)
+      .eq('is_draft', true);
+
+    if (error) throw error;
+  },
+
+  // ==================== ALERTAS DE VENCIMENTO ====================
+  getExpiringDocuments: async (tripId: string, daysThreshold: number = 90) => {
+    const today = new Date();
+    const thresholdDate = new Date();
+    thresholdDate.setDate(today.getDate() + daysThreshold);
+
+    const { data, error } = await supabase
+      .from('td_traveler_documents')
+      .select(`
+        *,
+        traveler:td_travelers!inner(
+          id,
+          full_name,
+          trip_id
+        )
+      `)
+      .eq('traveler.trip_id', tripId)
+      .not('doc_expiry', 'is', null)
+      .lte('doc_expiry', thresholdDate.toISOString().split('T')[0]);
+
+    if (error) throw error;
+
+    return (data || []).map(d => ({
+      documentId: d.id,
+      travelerId: d.traveler.id,
+      travelerName: d.traveler.full_name,
+      docType: d.doc_type,
+      docNumberLast4: d.doc_number_last4,
+      docExpiry: d.doc_expiry,
+      daysUntilExpiry: Math.ceil((new Date(d.doc_expiry).getTime() - today.getTime()) / (1000 * 60 * 60 * 24)),
+      isExpired: new Date(d.doc_expiry) < today
+    }));
+  },
+
+  calculateDocumentExpiryStatus: (expiryDate: string) => {
+    if (!expiryDate) return null;
+    
+    const today = new Date();
+    const expiry = new Date(expiryDate);
+    const daysUntil = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (daysUntil < 0) {
+      return { status: 'expired', color: 'red', label: 'Vencido', days: Math.abs(daysUntil) };
+    } else if (daysUntil <= 30) {
+      return { status: 'critical', color: 'red', label: `Vence em ${daysUntil} dias`, days: daysUntil };
+    } else if (daysUntil <= 90) {
+      return { status: 'warning', color: 'yellow', label: `Vence em ${daysUntil} dias`, days: daysUntil };
+    }
+    
+    return { status: 'ok', color: 'green', label: `Válido por ${daysUntil} dias`, days: daysUntil };
+  },
+
+  // ==================== TAGS NORMALIZADAS ====================
+  normalizeTags: (tags: string[]): string[] => {
+    if (!tags || tags.length === 0) return [];
+    
+    const normalized = tags
+      .map(tag => tag.trim())
+      .filter(tag => tag.length > 0)
+      .map(tag => tag.replace(/\s+/g, ' ')) // Colapsar espaços múltiplos
+      .map(tag => tag.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ')); // Title Case
+    
+    // Remover duplicadas
+    return [...new Set(normalized)];
+  },
+
+  getExistingTags: async (tripId: string): Promise<string[]> => {
+    const { data, error } = await supabase
+      .from('td_travelers')
+      .select('tags')
+      .eq('trip_id', tripId)
+      .eq('status', 'Ativo')
+      .not('tags', 'is', null);
+
+    if (error) throw error;
+
+    const allTags = (data || [])
+      .flatMap(t => t.tags || [])
+      .filter(tag => tag && tag.trim().length > 0);
+
+    return supabaseDataProvider.normalizeTags(allTags);
   },
 
   // ==================== VENDORS ====================

@@ -63,6 +63,20 @@ export const formatDateTime = (date: string | Date | null | undefined): string =
 export const dateToInput = (date: string | Date | null | undefined): string => {
   if (!date) return '';
   
+  // Se já está no formato YYYY-MM-DD, retorna direto (evita problema de timezone)
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return date;
+  }
+  
+  // Se é string em outro formato, tenta parsear como data local
+  if (typeof date === 'string') {
+    // Para datas no formato YYYY-MM-DD, adiciona horário local para evitar conversão UTC
+    const parts = date.split('T')[0].split('-');
+    if (parts.length === 3) {
+      return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+    }
+  }
+  
   const d = typeof date === 'string' ? new Date(date) : date;
   
   // Verifica se é uma data válida

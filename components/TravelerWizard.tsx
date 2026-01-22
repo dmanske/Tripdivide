@@ -5,6 +5,46 @@ import PhoneInput from './PhoneInput';
 import { dateToInput } from '../lib/formatters';
 import { dataProvider } from '../lib/dataProvider';
 
+// Funções de formatação de documentos
+const formatDocNumber = (value: string, docType: string): string => {
+  // Remove tudo que não é letra ou número
+  const cleaned = value.replace(/[^A-Za-z0-9]/g, '');
+  
+  switch (docType) {
+    case 'CPF':
+      // 000.000.000-00
+      return cleaned
+        .slice(0, 11)
+        .replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
+        .replace(/(\d{3})(\d{3})(\d{3})(\d{1})$/, '$1.$2.$3-$4')
+        .replace(/(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3')
+        .replace(/(\d{3})(\d{2})$/, '$1.$2');
+    
+    case 'RG':
+      // 00.000.000-0
+      return cleaned
+        .slice(0, 9)
+        .replace(/(\d{2})(\d{3})(\d{3})(\d{1})/, '$1.$2.$3-$4')
+        .replace(/(\d{2})(\d{3})(\d{3})$/, '$1.$2.$3')
+        .replace(/(\d{2})(\d{3})$/, '$1.$2');
+    
+    case 'CNH':
+      // 00000000000 (11 dígitos sem formatação)
+      return cleaned.slice(0, 11);
+    
+    case 'Passaporte':
+      // AA000000 (2 letras + 6 números)
+      return cleaned.slice(0, 8).toUpperCase();
+    
+    default:
+      return value;
+  }
+};
+
+const unformatDocNumber = (value: string): string => {
+  return value.replace(/[^A-Za-z0-9]/g, '');
+};
+
 interface TravelerWizardProps {
   trip: Trip;
   initialData?: Partial<Traveler>;
@@ -16,22 +56,48 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ trip, initialData, onSa
   const [step, setStep] = useState(1);
   const [showNewGroupInput, setShowNewGroupInput] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
-  const [documents, setDocuments] = useState<any[]>(initialData?.documents || []);
+  const [documents, setDocuments] = useState<any[]>([]);
   const [editingDoc, setEditingDoc] = useState<any>(null);
-  const [showDocNumber, setShowDocNumber] = useState<Record<number, boolean>>({});
+  const [editingDocIndex, setEditingDocIndex] = useState<number>(-1);
+  const [showDocNumber, setShowDocNumber] = useState(true); // Mostrar por padrão
   const [tagInput, setTagInput] = useState('');
+  const [loadingDocs, setLoadingDocs] = useState(false);
   
   const [formData, setFormData] = useState<Partial<Traveler>>({
     tripId: trip.id,
     type: TravelerType.ADULT,
     coupleId: trip.couples[0]?.id || '',
-    goesToSegments: trip.segments.map(s => s.id),
+    goesToSegments: trip.segments
+      .filter(s => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s.id))
+      .map(s => s.id),
     isPayer: true,
     canDrive: false,
     tags: [],
     status: 'Ativo',
     ...initialData
   });
+
+  // Carregar documentos descriptografados ao abrir para edição
+  useEffect(() => {
+    const loadDocuments = async () => {
+      if (initialData?.id) {
+        setLoadingDocs(true);
+        try {
+          const docs = await dataProvider.getTravelerDocuments(initialData.id);
+          setDocuments(docs);
+        } catch (error) {
+          console.error('Erro ao carregar documentos:', error);
+          setDocuments(initialData?.documents || []);
+        } finally {
+          setLoadingDocs(false);
+        }
+      } else {
+        setDocuments([]);
+      }
+    };
+    
+    loadDocuments();
+  }, [initialData?.id]);
 
   // Ajustar defaults baseado no tipo
   useEffect(() => {
@@ -79,6 +145,12 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ trip, initialData, onSa
       ...formData,
       tags: formData.tags?.filter(t => t !== tag)
     });
+  };
+
+  // Helper para definir categoria do documento baseado no tipo
+  const getDocCategory = (docType: string): string => {
+    if (docType === 'Visto' || docType === 'ESTA') return 'entry';
+    return 'identity';
   };
 
   return (
@@ -346,7 +418,16 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ trip, initialData, onSa
                       </p>
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={() => setEditingDoc(doc)} className="text-indigo-400 hover:text-indigo-300 text-xs">✏️</button>
+                      <button 
+                        onClick={() => {
+                          setEditingDoc(doc);
+                          setEditingDocIndex(idx);
+                          setShowDocNumber(true); // Mostrar por padrão ao editar
+                        }} 
+                        className="text-indigo-400 hover:text-indigo-300 text-xs"
+                      >
+                        ✏️
+                      </button>
                       <button onClick={() => setDocuments(documents.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-300 text-xs">🗑️</button>
                     </div>
                   </div>
@@ -356,85 +437,459 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ trip, initialData, onSa
              {/* Formulário de novo documento */}
              {editingDoc !== null ? (
                <Card className="!bg-gray-900/50">
-                 <p className="text-xs font-bold text-gray-400 mb-3">{editingDoc.docNumber ? 'Editar Documento' : 'Novo Documento'}</p>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                 <p className="text-xs font-bold text-gray-400 mb-3">{editingDocIndex >= 0 ? 'Editar Documento' : 'Novo Documento'}</p>
+                 <div className="space-y-4">
+                   {/* Tipo de Documento */}
                    <Input 
                      as="select" 
                      label="Tipo *" 
                      value={editingDoc.docType || 'Passaporte'} 
-                     onChange={e => setEditingDoc({...editingDoc, docType: e.target.value})}
+                     onChange={e => setEditingDoc({
+                       ...editingDoc, 
+                       docType: e.target.value,
+                       docCategory: getDocCategory(e.target.value)
+                     })}
                    >
-                     <option value="Passaporte">Passaporte</option>
-                     <option value="RG">RG</option>
-                     <option value="CPF">CPF</option>
-                     <option value="CNH">CNH</option>
-                     <option value="Visto">Visto</option>
-                     <option value="Outro">Outro</option>
+                     <option value="Passaporte">🛂 Passaporte</option>
+                     <option value="RG">🪪 RG</option>
+                     <option value="CPF">📄 CPF</option>
+                     <option value="CNH">🚗 CNH</option>
+                     <option value="Visto">🌍 Visto</option>
+                     <option value="ESTA">✈️ ESTA/ETA</option>
+                     <option value="Outro">📋 Outro</option>
                    </Input>
-                   <div>
-                     <label className="block text-sm font-medium text-gray-400 mb-2">Número *</label>
-                     <div className="flex gap-2">
-                       <input
-                         type={showDocNumber[documents.indexOf(editingDoc)] ? 'text' : 'password'}
-                         value={editingDoc.docNumber || ''}
-                         onChange={e => setEditingDoc({...editingDoc, docNumber: e.target.value})}
-                         placeholder="Ex: AB123456"
-                         className="flex-1 px-4 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
+
+                   {/* PASSAPORTE */}
+                   {editingDoc.docType === 'Passaporte' && (
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                       <Input 
+                         label="País Emissor *" 
+                         value={editingDoc.issuingCountry || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, issuingCountry: e.target.value || ''})}
+                         placeholder="Ex: Brasil"
                        />
-                       <button
-                         onClick={() => setShowDocNumber({...showDocNumber, [documents.indexOf(editingDoc)]: !showDocNumber[documents.indexOf(editingDoc)]})}
-                         className="px-3 text-gray-500 hover:text-gray-300"
-                       >
-                         {showDocNumber[documents.indexOf(editingDoc)] ? '🙈' : '👁️'}
-                       </button>
+                       <div>
+                         <label className="block text-sm font-medium text-gray-400 mb-2">Número *</label>
+                         <div className="flex gap-2">
+                           <input
+                             type={showDocNumber ? 'text' : 'password'}
+                             value={showDocNumber ? formatDocNumber(editingDoc.docNumber || '', editingDoc.docType) : editingDoc.docNumber || ''}
+                             onChange={e => {
+                               const unformatted = unformatDocNumber(e.target.value);
+                               setEditingDoc({...editingDoc, docNumber: unformatted || ''});
+                             }}
+                             placeholder="Ex: AB123456"
+                             className="flex-1 px-4 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                           />
+                           <button
+                             onClick={() => setShowDocNumber(!showDocNumber)}
+                             className="px-3 text-gray-500 hover:text-gray-300"
+                           >
+                             {showDocNumber ? '👁️' : '🙈'}
+                           </button>
+                         </div>
+                       </div>
+                       <Input 
+                         label="Data de Emissão" 
+                         type="date" 
+                         value={dateToInput(editingDoc.issueDate) || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, issueDate: e.target.value || ''})}
+                       />
+                       <Input 
+                         label="Vencimento *" 
+                         type="date" 
+                         value={dateToInput(editingDoc.docExpiry) || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, docExpiry: e.target.value || ''})}
+                       />
+                       <Input 
+                         label="Local de Emissão" 
+                         value={editingDoc.issuerPlace || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, issuerPlace: e.target.value || ''})}
+                         placeholder="Ex: São Paulo"
+                       />
+                       <Input 
+                         label="Observações" 
+                         value={editingDoc.notes || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, notes: e.target.value || ''})}
+                         placeholder="Detalhes adicionais"
+                       />
                      </div>
-                   </div>
-                   <Input 
-                     label="País Emissor" 
-                     value={editingDoc.issuingCountry || ''} 
-                     onChange={e => setEditingDoc({...editingDoc, issuingCountry: e.target.value})}
-                     placeholder="Ex: Brasil"
-                   />
-                   <Input 
-                     label="Vencimento" 
-                     type="date" 
-                     value={dateToInput(editingDoc.docExpiry)} 
-                     onChange={e => setEditingDoc({...editingDoc, docExpiry: e.target.value})}
-                   />
-                   <Input 
-                     label="Observações" 
-                     className="md:col-span-2"
-                     value={editingDoc.notes || ''} 
-                     onChange={e => setEditingDoc({...editingDoc, notes: e.target.value})}
-                     placeholder="Ex: Visto de turismo válido por 90 dias"
-                   />
+                   )}
+
+                   {/* RG */}
+                   {editingDoc.docType === 'RG' && (
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                       <Input 
+                         label="Estado Emissor *" 
+                         value={editingDoc.issuerState || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, issuerState: e.target.value})}
+                         placeholder="Ex: SP"
+                       />
+                       <div>
+                         <label className="block text-sm font-medium text-gray-400 mb-2">Número *</label>
+                         <div className="flex gap-2">
+                           <input
+                             type={showDocNumber ? 'text' : 'password'}
+                             value={showDocNumber ? formatDocNumber(editingDoc.docNumber || '', editingDoc.docType) : editingDoc.docNumber || ''}
+                             onChange={e => {
+                               const unformatted = unformatDocNumber(e.target.value);
+                               setEditingDoc({...editingDoc, docNumber: unformatted});
+                             }}
+                             placeholder="Ex: 00.000.000-0"
+                             className="flex-1 px-4 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                           />
+                           <button
+                             onClick={() => setShowDocNumber(!showDocNumber)}
+                             className="px-3 text-gray-500 hover:text-gray-300"
+                           >
+                             {showDocNumber ? '👁️' : '🙈'}
+                           </button>
+                         </div>
+                       </div>
+                       <Input 
+                         label="Órgão Emissor" 
+                         value={editingDoc.issuerAgency || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, issuerAgency: e.target.value})}
+                         placeholder="Ex: SSP"
+                       />
+                       <Input 
+                         label="Data de Emissão" 
+                         type="date" 
+                         value={dateToInput(editingDoc.issueDate) || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, issueDate: e.target.value || ''})}
+                       />
+                       <Input 
+                         label="Vencimento (opcional)" 
+                         type="date" 
+                         value={dateToInput(editingDoc.docExpiry) || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, docExpiry: e.target.value || ''})}
+                       />
+                       <Input 
+                         label="Observações" 
+                         value={editingDoc.notes || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, notes: e.target.value})}
+                         placeholder="Detalhes adicionais"
+                       />
+                     </div>
+                   )}
+
+                   {/* CPF */}
+                   {editingDoc.docType === 'CPF' && (
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                       <div>
+                         <label className="block text-sm font-medium text-gray-400 mb-2">Número *</label>
+                         <div className="flex gap-2">
+                           <input
+                             type={showDocNumber ? 'text' : 'password'}
+                             value={showDocNumber ? formatDocNumber(editingDoc.docNumber || '', editingDoc.docType) : editingDoc.docNumber || ''}
+                             onChange={e => {
+                               const unformatted = unformatDocNumber(e.target.value);
+                               setEditingDoc({...editingDoc, docNumber: unformatted});
+                             }}
+                             placeholder="Ex: 000.000.000-00"
+                             className="flex-1 px-4 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                           />
+                           <button
+                             onClick={() => setShowDocNumber(!showDocNumber)}
+                             className="px-3 text-gray-500 hover:text-gray-300"
+                           >
+                             {showDocNumber ? '👁️' : '🙈'}
+                           </button>
+                         </div>
+                       </div>
+                       <Input 
+                         label="Observações" 
+                         className="md:col-span-2"
+                         value={editingDoc.notes || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, notes: e.target.value})}
+                         placeholder="Detalhes adicionais"
+                       />
+                     </div>
+                   )}
+
+                   {/* CNH */}
+                   {editingDoc.docType === 'CNH' && (
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                       <div>
+                         <label className="block text-sm font-medium text-gray-400 mb-2">Número de Registro *</label>
+                         <div className="flex gap-2">
+                           <input
+                             type={showDocNumber ? 'text' : 'password'}
+                             value={showDocNumber ? formatDocNumber(editingDoc.docNumber || '', editingDoc.docType) : editingDoc.docNumber || ''}
+                             onChange={e => {
+                               const unformatted = unformatDocNumber(e.target.value);
+                               setEditingDoc({...editingDoc, docNumber: unformatted});
+                             }}
+                             placeholder="Ex: 12345678900"
+                             className="flex-1 px-4 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                           />
+                           <button
+                             onClick={() => setShowDocNumber(!showDocNumber)}
+                             className="px-3 text-gray-500 hover:text-gray-300"
+                           >
+                             {showDocNumber ? '👁️' : '🙈'}
+                           </button>
+                         </div>
+                       </div>
+                       <Input 
+                         as="select"
+                         label="Categoria" 
+                         value={editingDoc.licenseCategory || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, licenseCategory: e.target.value})}
+                       >
+                         <option value="">Selecione</option>
+                         <option value="A">A - Moto</option>
+                         <option value="B">B - Carro</option>
+                         <option value="AB">AB - Moto e Carro</option>
+                         <option value="C">C - Caminhão</option>
+                         <option value="D">D - Ônibus</option>
+                         <option value="E">E - Carreta</option>
+                       </Input>
+                       <Input 
+                         label="UF Emissora" 
+                         value={editingDoc.issuerState || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, issuerState: e.target.value})}
+                         placeholder="Ex: SP"
+                       />
+                       <Input 
+                         label="Data de Emissão" 
+                         type="date" 
+                         value={dateToInput(editingDoc.issueDate) || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, issueDate: e.target.value || ''})}
+                       />
+                       <Input 
+                         label="Vencimento *" 
+                         type="date" 
+                         value={dateToInput(editingDoc.docExpiry) || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, docExpiry: e.target.value || ''})}
+                       />
+                       <Input 
+                         label="Observações" 
+                         value={editingDoc.notes || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, notes: e.target.value})}
+                         placeholder="Detalhes adicionais"
+                       />
+                     </div>
+                   )}
+
+                   {/* VISTO */}
+                   {editingDoc.docType === 'Visto' && (
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                       <Input 
+                         label="País/Região *" 
+                         value={editingDoc.regionOrCountry || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, regionOrCountry: e.target.value})}
+                         placeholder="Ex: EUA, Schengen"
+                       />
+                       <Input 
+                         label="Categoria" 
+                         value={editingDoc.visaCategory || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, visaCategory: e.target.value})}
+                         placeholder="Ex: B1/B2, Turismo"
+                       />
+                       <Input 
+                         as="select"
+                         label="Tipo de Entrada" 
+                         value={editingDoc.entryType || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, entryType: e.target.value})}
+                       >
+                         <option value="">Selecione</option>
+                         <option value="single">Entrada Única</option>
+                         <option value="multiple">Múltiplas Entradas</option>
+                       </Input>
+                       <Input 
+                         label="Duração (dias)" 
+                         type="number"
+                         value={editingDoc.stayDurationDays || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, stayDurationDays: parseInt(e.target.value) || null})}
+                         placeholder="Ex: 90"
+                       />
+                       <div>
+                         <label className="block text-sm font-medium text-gray-400 mb-2">Número/ID (opcional)</label>
+                         <div className="flex gap-2">
+                           <input
+                             type={showDocNumber ? 'text' : 'password'}
+                             value={editingDoc.docNumber || ''}
+                             onChange={e => setEditingDoc({...editingDoc, docNumber: e.target.value})}
+                             placeholder="Ex: 123456789"
+                             className="flex-1 px-4 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                           />
+                           <button
+                             onClick={() => setShowDocNumber(!showDocNumber)}
+                             className="px-3 text-gray-500 hover:text-gray-300"
+                           >
+                             {showDocNumber ? '👁️' : '🙈'}
+                           </button>
+                         </div>
+                       </div>
+                       <Input 
+                         label="Vencimento *" 
+                         type="date" 
+                         value={dateToInput(editingDoc.docExpiry) || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, docExpiry: e.target.value || ''})}
+                       />
+                       <Input 
+                         label="Observações" 
+                         className="md:col-span-2"
+                         value={editingDoc.notes || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, notes: e.target.value})}
+                         placeholder="Ex: Válido para turismo"
+                       />
+                     </div>
+                   )}
+
+                   {/* ESTA/ETA */}
+                   {editingDoc.docType === 'ESTA' && (
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                       <Input 
+                         label="País/Região *" 
+                         value={editingDoc.regionOrCountry || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, regionOrCountry: e.target.value})}
+                         placeholder="Ex: EUA, Canadá"
+                       />
+                       <div>
+                         <label className="block text-sm font-medium text-gray-400 mb-2">Número/ID (opcional)</label>
+                         <div className="flex gap-2">
+                           <input
+                             type={showDocNumber ? 'text' : 'password'}
+                             value={editingDoc.docNumber || ''}
+                             onChange={e => setEditingDoc({...editingDoc, docNumber: e.target.value})}
+                             placeholder="Ex: 123456789"
+                             className="flex-1 px-4 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                           />
+                           <button
+                             onClick={() => setShowDocNumber(!showDocNumber)}
+                             className="px-3 text-gray-500 hover:text-gray-300"
+                           >
+                             {showDocNumber ? '👁️' : '🙈'}
+                           </button>
+                         </div>
+                       </div>
+                       <Input 
+                         label="Vencimento *" 
+                         type="date" 
+                         value={dateToInput(editingDoc.docExpiry) || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, docExpiry: e.target.value || ''})}
+                       />
+                       <Input 
+                         label="Observações" 
+                         value={editingDoc.notes || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, notes: e.target.value})}
+                         placeholder="Detalhes adicionais"
+                       />
+                     </div>
+                   )}
+
+                   {/* OUTRO */}
+                   {editingDoc.docType === 'Outro' && (
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                       <Input 
+                         label="Nome do Documento *" 
+                         value={editingDoc.customLabel || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, customLabel: e.target.value})}
+                         placeholder="Ex: Carteira do Plano"
+                       />
+                       <div>
+                         <label className="block text-sm font-medium text-gray-400 mb-2">Número/ID (opcional)</label>
+                         <div className="flex gap-2">
+                           <input
+                             type={showDocNumber ? 'text' : 'password'}
+                             value={editingDoc.docNumber || ''}
+                             onChange={e => setEditingDoc({...editingDoc, docNumber: e.target.value})}
+                             placeholder="Ex: 123456"
+                             className="flex-1 px-4 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                           />
+                           <button
+                             onClick={() => setShowDocNumber(!showDocNumber)}
+                             className="px-3 text-gray-500 hover:text-gray-300"
+                           >
+                             {showDocNumber ? '👁️' : '🙈'}
+                           </button>
+                         </div>
+                       </div>
+                       <Input 
+                         label="País/Estado Emissor" 
+                         value={editingDoc.issuingCountry || editingDoc.issuerState || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, issuingCountry: e.target.value})}
+                         placeholder="Ex: Brasil"
+                       />
+                       <Input 
+                         label="Vencimento (opcional)" 
+                         type="date" 
+                         value={dateToInput(editingDoc.docExpiry) || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, docExpiry: e.target.value || ''})}
+                       />
+                       <Input 
+                         label="Observações" 
+                         className="md:col-span-2"
+                         value={editingDoc.notes || ''} 
+                         onChange={e => setEditingDoc({...editingDoc, notes: e.target.value})}
+                         placeholder="Detalhes adicionais"
+                       />
+                     </div>
+                   )}
                  </div>
+
                  <div className="flex gap-2 mt-4">
                    <Button 
                      variant="primary" 
                      className="flex-1"
-                     disabled={!editingDoc.docType || !editingDoc.docNumber}
+                     disabled={
+                       !editingDoc.docType || 
+                       (editingDoc.docType === 'Passaporte' && (!editingDoc.issuingCountry || !editingDoc.docNumber || !editingDoc.docExpiry)) ||
+                       (editingDoc.docType === 'RG' && (!editingDoc.issuerState || !editingDoc.docNumber)) ||
+                       (editingDoc.docType === 'CPF' && !editingDoc.docNumber) ||
+                       (editingDoc.docType === 'CNH' && (!editingDoc.docNumber || !editingDoc.docExpiry)) ||
+                       (editingDoc.docType === 'Visto' && (!editingDoc.regionOrCountry || !editingDoc.docExpiry)) ||
+                       (editingDoc.docType === 'ESTA' && (!editingDoc.regionOrCountry || !editingDoc.docExpiry)) ||
+                       (editingDoc.docType === 'Outro' && !editingDoc.customLabel)
+                     }
                      onClick={() => {
-                       if (editingDoc.docType && editingDoc.docNumber) {
-                         const existingIdx = documents.findIndex(d => d === editingDoc);
-                         if (existingIdx >= 0) {
-                           const newDocs = [...documents];
-                           newDocs[existingIdx] = editingDoc;
-                           setDocuments(newDocs);
-                         } else {
-                           setDocuments([...documents, editingDoc]);
-                         }
-                         setEditingDoc(null);
+                       if (editingDocIndex >= 0) {
+                         // Editar existente
+                         const newDocs = [...documents];
+                         newDocs[editingDocIndex] = editingDoc;
+                         setDocuments(newDocs);
+                       } else {
+                         // Adicionar novo
+                         setDocuments([...documents, editingDoc]);
                        }
+                       setEditingDoc(null);
+                       setEditingDocIndex(-1);
+                       setShowDocNumber(false);
                      }}
                    >
-                     {editingDoc.id ? 'Atualizar' : 'Adicionar'}
+                     {editingDocIndex >= 0 ? 'Atualizar' : 'Adicionar'}
                    </Button>
-                   <Button variant="ghost" onClick={() => setEditingDoc(null)}>Cancelar</Button>
+                   <Button 
+                     variant="ghost" 
+                     onClick={() => {
+                       setEditingDoc(null);
+                       setEditingDocIndex(-1);
+                       setShowDocNumber(true);
+                     }}
+                   >
+                     Cancelar
+                   </Button>
                  </div>
                </Card>
              ) : (
-               <Button variant="outline" className="w-full" onClick={() => setEditingDoc({})}>
+               <Button 
+                 variant="outline" 
+                 className="w-full" 
+                 onClick={() => {
+                   setEditingDoc({
+                     docType: 'Passaporte',
+                     docCategory: 'identity',
+                     docNumber: '',
+                     issuingCountry: '',
+                     docExpiry: '',
+                     notes: ''
+                   });
+                   setEditingDocIndex(-1);
+                   setShowDocNumber(true); // Mostrar por padrão ao adicionar
+                 }}
+               >
                  + Adicionar Documento
                </Button>
              )}
@@ -457,7 +912,19 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ trip, initialData, onSa
            ) : (
              <Button 
                variant="primary" 
-               onClick={() => onSave({...formData, documents} as Traveler)} 
+               onClick={() => {
+                 // Filtrar IDs inválidos (como "seg-all") antes de salvar
+                 const validSegments = (formData.goesToSegments || []).filter(id => {
+                   // Verificar se é um UUID válido (formato: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+                   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+                 });
+                 
+                 onSave({
+                   ...formData, 
+                   goesToSegments: validSegments,
+                   documents
+                 } as Traveler);
+               }} 
                disabled={!isStep1Valid()}
              >
                Salvar Viajante

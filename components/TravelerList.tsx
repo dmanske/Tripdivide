@@ -7,6 +7,44 @@ import TravelerWizard from './TravelerWizard';
 import TravelerImportModal from './TravelerImportModal';
 import { formatPhone, formatSupabaseDate } from '../lib/formatters';
 
+// Funções de formatação de documentos
+const formatDocNumber = (value: string, docType: string): string => {
+  if (!value) return '';
+  
+  // Remove tudo que não é letra ou número
+  const cleaned = value.replace(/[^A-Za-z0-9]/g, '');
+  
+  switch (docType) {
+    case 'CPF':
+      // 000.000.000-00
+      return cleaned
+        .slice(0, 11)
+        .replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
+        .replace(/(\d{3})(\d{3})(\d{3})(\d{1})$/, '$1.$2.$3-$4')
+        .replace(/(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3')
+        .replace(/(\d{3})(\d{2})$/, '$1.$2');
+    
+    case 'RG':
+      // 00.000.000-0
+      return cleaned
+        .slice(0, 9)
+        .replace(/(\d{2})(\d{3})(\d{3})(\d{1})/, '$1.$2.$3-$4')
+        .replace(/(\d{2})(\d{3})(\d{3})$/, '$1.$2.$3')
+        .replace(/(\d{2})(\d{3})$/, '$1.$2');
+    
+    case 'CNH':
+      // 00000000000 (11 dígitos sem formatação)
+      return cleaned.slice(0, 11);
+    
+    case 'Passaporte':
+      // AA000000 (2 letras + 6 números)
+      return cleaned.slice(0, 8).toUpperCase();
+    
+    default:
+      return value;
+  }
+};
+
 interface TravelerListProps {
   trip: Trip;
   onRefresh: () => void;
@@ -239,7 +277,7 @@ const TravelerList: React.FC<TravelerListProps> = ({ trip, onRefresh }) => {
                                 </span>
                               )}
                             </div>
-                            <p className="text-lg font-black tracking-widest text-white mb-1">{doc.docNumber}</p>
+                            <p className="text-lg font-black tracking-widest text-white mb-1">{formatDocNumber(doc.docNumber, doc.docType)}</p>
                             {doc.issuingCountry && (
                               <p className="text-xs text-gray-500">🌍 {doc.issuingCountry}</p>
                             )}
