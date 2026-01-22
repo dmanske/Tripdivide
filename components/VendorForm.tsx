@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Trip, Vendor, VendorContact, PaymentMethod } from '../types';
 import { Button, Input, Card, Badge } from './CommonUI';
+import PhoneInput from './PhoneInput';
 
 interface VendorFormProps {
   trip: Trip;
@@ -132,7 +133,15 @@ const VendorForm: React.FC<VendorFormProps> = ({ trip, initialData, onSave, onCa
                        <div className="flex-1 grid grid-cols-2 gap-3">
                           <Input label="Nome" value={contact.name} onChange={e => updateContact({...contact, name: e.target.value})} />
                           <Input label="Cargo/Setor" value={contact.role} onChange={e => updateContact({...contact, role: e.target.value})} />
-                          <Input label="WhatsApp/Fone" value={contact.phone} onChange={e => updateContact({...contact, phone: e.target.value})} />
+                          <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-2">WhatsApp/Fone</label>
+                            <PhoneInput 
+                              value={contact.phone || ''} 
+                              onChange={phone => updateContact({...contact, phone})} 
+                              placeholder="(00) 00000-0000"
+                              className="w-full px-4 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                            />
+                          </div>
                           <Input label="Email" value={contact.email} onChange={e => updateContact({...contact, email: e.target.value})} />
                        </div>
                        <button onClick={() => removeContact(contact.id)} className="ml-4 text-red-500/50 hover:text-red-500 p-2">✕</button>

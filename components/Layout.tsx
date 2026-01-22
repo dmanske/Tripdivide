@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { supabase } from '../lib/supabase';
 import { ICONS } from '../constants.tsx';
 
 interface LayoutProps {
@@ -7,9 +8,10 @@ interface LayoutProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   tripName: string;
+  userEmail?: string;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, tripName }) => {
+const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, tripName, userEmail }) => {
   const menuItems = [
     { id: 'dashboard', label: 'Painel Geral', icon: ICONS.Dashboard },
     { id: 'travelers', label: 'Viajantes', icon: ICONS.Travelers },
@@ -19,6 +21,11 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, trip
     { id: 'payments', label: 'Fluxo de Caixa', icon: ICONS.Expenses },
     { id: 'settlement', label: 'Acerto de Contas', icon: ICONS.Settlement },
   ];
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.reload();
+  };
 
   return (
     <div className="flex min-h-screen bg-gray-950 text-gray-100">
@@ -52,14 +59,22 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, trip
           })}
         </nav>
 
-        <div className="p-4 border-t border-gray-800">
+        <div className="p-4 border-t border-gray-800 space-y-2">
            <div className="flex items-center gap-3 p-2 bg-gray-950 rounded-xl border border-gray-800">
-              <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-xs font-bold text-indigo-400 border border-indigo-500/30">TD</div>
+              <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-xs font-bold text-indigo-400 border border-indigo-500/30">
+                {userEmail ? userEmail[0].toUpperCase() : 'U'}
+              </div>
               <div className="flex-1 overflow-hidden">
-                <p className="text-[10px] font-bold truncate text-white uppercase">Usuário TripDivide</p>
+                <p className="text-[10px] font-bold truncate text-white uppercase">{userEmail || 'Usuário'}</p>
                 <p className="text-[9px] text-gray-500 font-black uppercase">Organizador</p>
               </div>
            </div>
+           <button
+             onClick={handleLogout}
+             className="w-full px-4 py-2 bg-red-600/10 hover:bg-red-600/20 border border-red-600/20 hover:border-red-600/30 rounded-xl text-red-400 hover:text-red-300 text-xs font-bold uppercase tracking-tight transition-all"
+           >
+             Sair
+           </button>
         </div>
       </aside>
 

@@ -3,6 +3,7 @@ import React from 'react';
 import { Trip, Quote, Expense, QuoteStatus, ExpenseStatus } from '../types';
 import { Card, Badge, Button } from './CommonUI';
 import { Money } from '../lib/money';
+import { dataProvider } from '../lib/dataProvider';
 
 interface DashboardProps {
   trip: Trip;
@@ -12,7 +13,10 @@ interface DashboardProps {
   onRefresh: () => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ trip, quotes, expenses, onNavigate }) => {
+const Dashboard: React.FC<DashboardProps> = ({ trip, quotes, expenses, onNavigate, onRefresh }) => {
+  const [showNewGroupInput, setShowNewGroupInput] = React.useState(false);
+  const [newGroupName, setNewGroupName] = React.useState('');
+  
   const totalTravelers = trip.couples.reduce((sum, c) => sum + c.members.length, 0);
   
   const estimated = quotes.reduce((sum, q) => sum + (q.status === QuoteStatus.SHORTLIST || q.status === QuoteStatus.CHOSEN ? q.amountBrl : 0), 0);
@@ -49,15 +53,111 @@ const Dashboard: React.FC<DashboardProps> = ({ trip, quotes, expenses, onNavigat
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <section className="lg:col-span-2 space-y-4">
-          <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
-             <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></div>
-             Casais e viajantes no grupo
-          </h3>
+          <div className="flex justify-between items-center">
+            <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
+               <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></div>
+               Casais e viajantes no grupo
+            </h3>
+            {!showNewGroupInput ? (
+              <Button variant="ghost" className="text-[10px]" onClick={() => {
+                setShowNewGroupInput(true);
+                setNewGroupName('');
+              }}>+ Novo Grupo</Button>
+            ) : (
+              <div className="flex gap-2 items-center">
+                <input
+                  type="text"
+                  value={newGroupName}
+                  onChange={e => setNewGroupName(e.target.value)}
+                  placeholder="Nome do grupo"
+                  className="px-3 py-1.5 bg-gray-950 border border-indigo-500 rounded-lg text-white text-xs placeholder-gray-600 focus:outline-none focus:border-indigo-400 transition-colors"
+                  autoFocus
+                  onKeyDown={async (e) => {
+                    if (e.key === 'Enter' && newGroupName.trim()) {
+                      e.preventDefault();
+                      await dataProvider.saveCouple(trip.id, { name: newGroupName.trim() });
+                      setShowNewGroupInput(false);
+                      setNewGroupName('');
+                      onRefresh();
+                    } else if (e.key === 'Escape') {
+                      setShowNewGroupInput(false);
+                      setNewGroupName('');
+                    }
+                  }}
+                />
+                <Button 
+                  variant="primary" 
+                  className="text-[10px] px-3 py-1.5"
+                  disabled={!newGroupName.trim()}
+                  onClick={async () => {
+                    if (newGroupName.trim()) {
+                      await dataProvider.saveCouple(trip.id, { name: newGroupName.trim() });
+                      setShowNewGroupInput(false);
+                      setNewGroupName('');
+                      onRefresh();
+                    }
+                  }}
+                >
+                  Criar
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  className="text-[10px] px-2 py-1.5"
+                  onClick={() => {
+                    setShowNewGroupInput(false);
+                    setNewGroupName('');
+                  }}
+                >
+                  ✕
+                </Button>
+              </div>
+            )}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {trip.couples.map(couple => (
-              <Card key={couple.id} className="hover:border-gray-700 transition-all cursor-pointer" onClick={() => onNavigate('travelers')}>
+              <Card key={couple.id} className="hover:border-gray-700 transition-all cursor-pointer group" onClick={() => onNavigate('travelers')}>
                 <div className="flex justify-between items-start mb-4">
-                   <p className="font-bold text-gray-100 uppercase text-sm tracking-tight">{couple.name}</p>
+                   <div className="flex-1 flex items-center gap-2">
+                     <p className="font-bold text-gray-100 uppercase text-sm tracking-tight">{couple.name}</p>
+                     <button 
+                       onClick={(e) => {
+                         e.stopPropagation();
+                         const input = e.currentTarget.parentElement?.querySelector('input[data-edit-group]') as HTMLInputElement;
+                         if (input) {
+                           input.style.display = 'block';
+                           input.focus();
+                           input.select();
+                         }
+                       }}
+                       className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 hover:text-indigo-400 text-xs"
+                     >
+                       ✏️
+                     </button>
+                     <input
+                       data-edit-group
+                       type="text"
+                       defaultValue={couple.name}
+                       style={{ display: 'none' }}
+                       className="px-2 py-1 bg-gray-900 border border-indigo-500 rounded text-xs text-white"
+                       onBlur={async (e) => {
+                         const newName = e.target.value.trim();
+                         if (newName && newName !== couple.name) {
+                           await dataProvider.saveCouple(trip.id, { id: couple.id, name: newName });
+                           onRefresh();
+                         }
+                         e.target.style.display = 'none';
+                       }}
+                       onKeyDown={async (e) => {
+                         if (e.key === 'Enter') {
+                           e.currentTarget.blur();
+                         } else if (e.key === 'Escape') {
+                           e.currentTarget.value = couple.name;
+                           e.currentTarget.style.display = 'none';
+                         }
+                       }}
+                       onClick={(e) => e.stopPropagation()}
+                     />
+                   </div>
                    <Badge color="gray">{couple.members.length} PES</Badge>
                 </div>
                 <div className="space-y-1">

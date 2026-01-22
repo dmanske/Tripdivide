@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Trip, Vendor, Quote, QuoteStatus, VendorQuoteRequest } from '../types';
 import { Card, Badge, Button, Modal, Input } from './CommonUI';
 import { dataProvider } from '../lib/dataProvider';
+import { formatSupabaseDateTime } from '../lib/formatters';
 
 interface VendorDetailViewProps {
   trip: Trip;
@@ -126,7 +127,7 @@ const VendorDetailView: React.FC<VendorDetailViewProps> = ({ trip, vendor, onEdi
                <Card key={r.id} className="!p-4 !bg-gray-900/50">
                   <div className="flex justify-between items-center mb-2">
                      <Badge color="indigo">{r.category}</Badge>
-                     <span className="text-[10px] text-gray-500 font-bold">{new Date(r.createdAt).toLocaleString('pt-BR')}</span>
+                     <span className="text-[10px] text-gray-500 font-bold">{formatSupabaseDateTime(r.createdAt)}</span>
                   </div>
                   <pre className="text-[10px] font-mono bg-black/50 p-4 rounded text-gray-400 whitespace-pre-wrap">{r.message}</pre>
                   <div className="mt-4 flex justify-end">

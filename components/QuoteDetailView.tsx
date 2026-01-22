@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Trip, Quote, QuoteStatus, Currency, Vendor, PaymentMethod, QuoteVersion } from '../types';
 import { Card, Badge, Button, Modal, Input } from './CommonUI';
 import { dataProvider } from '../lib/dataProvider';
+import { formatSupabaseDateTime, dateToInput } from '../lib/formatters';
 
 interface QuoteDetailViewProps {
   trip: Trip;
@@ -160,7 +161,7 @@ const QuoteDetailView: React.FC<QuoteDetailViewProps> = ({ trip, quote, vendor, 
              <div className="space-y-6">
                 <Card title="Última Atualização">
                    <p className="text-xs text-gray-400">Pelo usuário: <span className="text-white font-bold">{quote.createdBy}</span></p>
-                   <p className="text-xs text-gray-400">Em: {new Date(quote.updatedAt).toLocaleString('pt-BR')}</p>
+                   <p className="text-xs text-gray-400">Em: {formatSupabaseDateTime(quote.updatedAt)}</p>
                 </Card>
              </div>
           </div>
@@ -176,7 +177,7 @@ const QuoteDetailView: React.FC<QuoteDetailViewProps> = ({ trip, quote, vendor, 
                         <div className="flex items-center gap-3">
                            <div className="w-8 h-8 rounded-full bg-indigo-600/20 text-indigo-400 flex items-center justify-center text-[10px] font-bold">V</div>
                            <div>
-                              <p className="text-sm font-black text-white">{new Date(v.createdAt).toLocaleString('pt-BR')}</p>
+                              <p className="text-sm font-black text-white">{formatSupabaseDateTime(v.createdAt)}</p>
                               <p className="text-[10px] text-gray-600 uppercase">Alterado por {v.createdBy}</p>
                            </div>
                         </div>
@@ -236,7 +237,7 @@ const QuoteDetailView: React.FC<QuoteDetailViewProps> = ({ trip, quote, vendor, 
                <Input label="Valor Original" name="totalAmount" type="number" step="0.01" defaultValue={quote.totalAmount} />
                <Input label="Câmbio" name="exchangeRate" type="number" step="0.01" defaultValue={quote.exchangeRate} />
             </div>
-            <Input label="Nova Validade" name="validUntil" type="date" defaultValue={quote.validUntil} />
+            <Input label="Nova Validade" name="validUntil" type="date" defaultValue={dateToInput(quote.validUntil)} />
             <div className="pt-4 border-t border-gray-800 flex justify-end gap-3">
                <Button variant="ghost" type="button" onClick={() => setIsUpdatePriceOpen(false)}>Cancelar</Button>
                <Button variant="primary" type="submit">Atualizar e Versionar</Button>

@@ -40,6 +40,57 @@ const steps = [
   }
 ];
 
+const features = [
+  {
+    icon: '💰',
+    title: 'Centavos Exatos',
+    benefit: 'Zero arredondamentos, zero confusão.',
+    bullets: ['Algoritmo ajusta resto automaticamente', 'Último pagante recebe o ajuste']
+  },
+  {
+    icon: '📱',
+    title: 'Import WhatsApp',
+    benefit: 'Cole e pronto. Sem digitação manual.',
+    bullets: ['Extrai preços e datas automaticamente', 'Suporta textos brutos de fornecedores']
+  },
+  {
+    icon: '🏢',
+    title: 'Gestão de Fornecedores',
+    benefit: 'Saiba com quem está fechando.',
+    bullets: ['Avalie reputação e SLA', 'Marque favoritos e red flags']
+  },
+  {
+    icon: '🔄',
+    title: 'Reembolsos Automáticos',
+    benefit: 'Quem pagou por quem, calculado.',
+    bullets: ['Detecta pagamentos cruzados', 'Gera lista de transferências']
+  },
+  {
+    icon: '🎯',
+    title: 'Segmentos de Viagem',
+    benefit: 'Nem todos vão a todos os lugares.',
+    bullets: ['Divida em etapas (Orlando, Miami)', 'Racha só quem participa']
+  },
+  {
+    icon: '💳',
+    title: 'Multi-Moeda',
+    benefit: 'Compare maçãs com maçãs.',
+    bullets: ['Cotações em USD, BRL ou outras', 'Conversão automática para comparação']
+  },
+  {
+    icon: '👨‍👩‍👧',
+    title: 'Racha Flexível',
+    benefit: 'Divida do seu jeito.',
+    bullets: ['Por casal, pessoa ou percentual', 'Crianças com peso diferenciado']
+  },
+  {
+    icon: '📊',
+    title: 'Auditoria Completa',
+    benefit: 'Transparência bancária para o grupo.',
+    bullets: ['Histórico imutável de tudo', 'Rastreie cada votação e pagamento']
+  }
+];
+
 const HowItWorks: React.FC = () => {
   return (
     <section id="como-funciona" className="py-32 bg-[#02040a] relative overflow-hidden">
@@ -93,6 +144,40 @@ const HowItWorks: React.FC = () => {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Features Section */}
+        <div className="mb-32">
+          <div className="text-center mb-16 space-y-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 mb-4 backdrop-blur-md">
+              <span className="text-[9px] font-black text-cyan-400 uppercase tracking-[0.4em]">Funcionalidades Exclusivas</span>
+            </div>
+            <h2 className="text-4xl md:text-6xl font-black text-white uppercase tracking-tighter leading-none italic">
+              Tudo que você precisa<br/>
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-gray-300 to-gray-600">em um só lugar.</span>
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {features.map((feature, idx) => (
+              <div key={idx} className="group relative">
+                <div className="absolute -inset-0.5 bg-gradient-to-b from-cyan-500/30 to-transparent rounded-[2.5rem] opacity-0 group-hover:opacity-100 transition duration-500 blur-sm" />
+                <div className="relative h-full bg-[#05070a]/40 border border-white/10 p-8 rounded-[2.5rem] backdrop-blur-xl flex flex-col hover:bg-white/[0.05] transition-all duration-500">
+                  <div className="text-4xl mb-6 transform group-hover:scale-110 transition-transform duration-500">{feature.icon}</div>
+                  <h3 className="text-xl font-black text-white uppercase tracking-tight mb-2 leading-tight">{feature.title}</h3>
+                  <p className="text-cyan-400 text-[10px] font-black mb-6 leading-relaxed uppercase tracking-widest">{feature.benefit}</p>
+                  <ul className="space-y-3 mt-auto border-t border-white/5 pt-6">
+                    {feature.bullets.map((bullet, i) => (
+                      <li key={i} className="flex items-start gap-2 text-[11px] text-gray-300 font-medium leading-snug group-hover:text-white transition-colors">
+                        <span className="text-cyan-500/80 mt-0.5">→</span>
+                        {bullet}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Why Different Section */}

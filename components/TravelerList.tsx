@@ -5,6 +5,7 @@ import { Card, Badge, Button, Input, Modal } from './CommonUI';
 import { dataProvider } from '../lib/dataProvider';
 import TravelerWizard from './TravelerWizard';
 import TravelerImportModal from './TravelerImportModal';
+import { formatPhone, formatSupabaseDate } from '../lib/formatters';
 
 interface TravelerListProps {
   trip: Trip;
@@ -19,6 +20,8 @@ const TravelerList: React.FC<TravelerListProps> = ({ trip, onRefresh }) => {
   const [editingTraveler, setEditingTraveler] = useState<Partial<Traveler> | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     loadTravelers();
@@ -26,7 +29,16 @@ const TravelerList: React.FC<TravelerListProps> = ({ trip, onRefresh }) => {
 
   const loadTravelers = async () => {
     const list = await dataProvider.getTravelers(trip.id);
-    setTravelers(list);
+    
+    // Carregar documentos para cada viajante
+    const travelersWithDocs = await Promise.all(
+      list.map(async (t) => {
+        const docs = await dataProvider.getTravelerDocuments(t.id);
+        return { ...t, documents: docs };
+      })
+    );
+    
+    setTravelers(travelersWithDocs);
   };
 
   const filteredTravelers = useMemo(() => {
@@ -54,20 +66,27 @@ const TravelerList: React.FC<TravelerListProps> = ({ trip, onRefresh }) => {
     setIsImportOpen(false);
     loadTravelers();
     onRefresh();
-    alert(`${count} viajantes importados com sucesso!`);
+    setSuccessMessage(`${count} viajantes importados com sucesso!`);
+    setTimeout(() => setSuccessMessage(null), 3000);
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('Deseja arquivar este viajante?')) {
-      await dataProvider.deleteTraveler(id);
-      loadTravelers();
-      onRefresh();
-      setSelectedTraveler(null);
-    }
+    await dataProvider.deleteTraveler(id);
+    loadTravelers();
+    onRefresh();
+    setSelectedTraveler(null);
+    setDeleteConfirm(null);
   };
 
   return (
     <div className="flex flex-col lg:flex-row h-full gap-8 animate-in fade-in duration-500">
+      {/* Mensagem de sucesso */}
+      {successMessage && (
+        <div className="fixed top-4 right-4 z-50 bg-emerald-600 text-white px-6 py-3 rounded-xl shadow-lg animate-in slide-in-from-top-2 duration-300">
+          <p className="text-sm font-bold">✓ {successMessage}</p>
+        </div>
+      )}
+      
       {/* PAINEL ESQUERDA: LISTA */}
       <div className="flex-1 space-y-6">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -76,7 +95,6 @@ const TravelerList: React.FC<TravelerListProps> = ({ trip, onRefresh }) => {
             <p className="text-gray-500">Gestão de participantes e documentos</p>
           </div>
           <div className="flex gap-2">
-             <Button variant="outline" onClick={() => setIsImportOpen(true)}>Importar</Button>
              <Button variant="primary" onClick={() => handleOpenWizard()}>+ Novo Viajante</Button>
           </div>
         </header>
@@ -194,7 +212,7 @@ const TravelerList: React.FC<TravelerListProps> = ({ trip, onRefresh }) => {
                           <div className="w-8 h-8 rounded-lg bg-gray-950 flex items-center justify-center border border-gray-800 text-indigo-400">📞</div>
                           <div>
                              <p className="text-xs text-gray-500 font-bold uppercase">Telefone</p>
-                             <p className="text-sm font-medium">{selectedTraveler.phone || 'Não informado'}</p>
+                             <p className="text-sm font-medium">{formatPhone(selectedTraveler.phone || '') || 'Não informado'}</p>
                           </div>
                        </div>
                        <div className="flex items-center gap-3">
@@ -209,15 +227,33 @@ const TravelerList: React.FC<TravelerListProps> = ({ trip, onRefresh }) => {
 
                  <section className="space-y-4">
                     <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Documentação</p>
-                    <div className="p-4 bg-gray-950 rounded-2xl border border-gray-800 space-y-4">
-                       <div className="flex justify-between items-center">
-                          <Badge color="indigo">{selectedTraveler.docType}</Badge>
-                          {selectedTraveler.docExpiry && (
-                            <span className="text-[10px] text-gray-500 font-bold">Vence em: {new Date(selectedTraveler.docExpiry).toLocaleDateString('pt-BR')}</span>
-                          )}
-                       </div>
-                       <p className="text-lg font-black tracking-widest text-white">{selectedTraveler.docNumber || 'DOC PENDENTE'}</p>
-                    </div>
+                    {selectedTraveler.documents && selectedTraveler.documents.length > 0 ? (
+                      <div className="space-y-2">
+                        {selectedTraveler.documents.map((doc: any) => (
+                          <div key={doc.id} className="p-4 bg-gray-950 rounded-2xl border border-gray-800">
+                            <div className="flex justify-between items-start mb-2">
+                              <Badge color="indigo">{doc.docType}</Badge>
+                              {doc.docExpiry && (
+                                <span className="text-[10px] text-gray-500 font-bold">
+                                  Vence: {formatSupabaseDate(doc.docExpiry)}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-lg font-black tracking-widest text-white mb-1">{doc.docNumber}</p>
+                            {doc.issuingCountry && (
+                              <p className="text-xs text-gray-500">🌍 {doc.issuingCountry}</p>
+                            )}
+                            {doc.notes && (
+                              <p className="text-xs text-gray-400 mt-2 italic">{doc.notes}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-4 bg-gray-950 rounded-2xl border border-gray-800 text-center">
+                        <p className="text-sm text-gray-600 italic">Nenhum documento cadastrado</p>
+                      </div>
+                    )}
                  </section>
 
                  <section className="space-y-2">
@@ -237,9 +273,20 @@ const TravelerList: React.FC<TravelerListProps> = ({ trip, onRefresh }) => {
 
               <footer className="p-6 border-t border-gray-800 bg-gray-950 flex gap-2">
                  <Button variant="outline" className="flex-1" onClick={() => handleOpenWizard(selectedTraveler)}>Editar</Button>
-                 <Button variant="ghost" className="px-3" onClick={() => handleDelete(selectedTraveler.id)}>
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                 </Button>
+                 {deleteConfirm === selectedTraveler.id ? (
+                   <>
+                     <Button variant="ghost" className="px-3 bg-red-600/20 text-red-400 hover:bg-red-600/30" onClick={() => handleDelete(selectedTraveler.id)}>
+                       Confirmar
+                     </Button>
+                     <Button variant="ghost" className="px-3" onClick={() => setDeleteConfirm(null)}>
+                       Cancelar
+                     </Button>
+                   </>
+                 ) : (
+                   <Button variant="ghost" className="px-3" onClick={() => setDeleteConfirm(selectedTraveler.id)}>
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                   </Button>
+                 )}
               </footer>
            </Card>
          )}
@@ -252,7 +299,18 @@ const TravelerList: React.FC<TravelerListProps> = ({ trip, onRefresh }) => {
            initialData={editingTraveler || undefined}
            onCancel={() => setIsWizardOpen(false)}
            onSave={async (t) => {
-              await dataProvider.saveTraveler(t);
+              const savedTraveler = await dataProvider.saveTraveler(t);
+              
+              // Salvar documentos
+              if (t.documents && t.documents.length > 0) {
+                for (const doc of t.documents) {
+                  await dataProvider.saveTravelerDocument({
+                    ...doc,
+                    travelerId: savedTraveler.id
+                  });
+                }
+              }
+              
               setIsWizardOpen(false);
               loadTravelers();
               onRefresh();

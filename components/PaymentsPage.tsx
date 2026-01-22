@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Trip, Payment, Expense } from '../types';
 import { Card, Badge, Input, Button } from './CommonUI';
 import { dataProvider } from '../lib/dataProvider';
+import { formatSupabaseDate } from '../lib/formatters';
 
 interface PaymentsPageProps {
   trip: Trip;
@@ -74,7 +75,7 @@ const PaymentsPage: React.FC<PaymentsPageProps> = ({ trip }) => {
                 const couple = trip.couples.find(c => c.id === p.paidByCoupleId);
                 return (
                   <tr key={p.id} className="hover:bg-gray-800/20 transition-colors">
-                     <td className="p-4 text-gray-400 text-sm">{new Date(p.paidAt).toLocaleDateString('pt-BR')}</td>
+                     <td className="p-4 text-gray-400 text-sm">{formatSupabaseDate(p.paidAt)}</td>
                      <td className="p-4 font-bold text-gray-200 text-sm">{couple?.name}</td>
                      <td className="p-4 text-gray-400 text-sm">{expense?.title || 'Avulso'}</td>
                      <td className="p-4"><Badge color="indigo">{p.method.toUpperCase()}</Badge></td>

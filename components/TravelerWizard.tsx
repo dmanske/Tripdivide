@@ -3,6 +3,9 @@ import React, { useState } from 'react';
 import { Trip, Traveler, TravelerType, DocType, Couple } from '../types';
 // Add Card to the imports from CommonUI
 import { Button, Input, Badge, Card } from './CommonUI';
+import PhoneInput from './PhoneInput';
+import { dateToInput } from '../lib/formatters';
+import { dataProvider } from '../lib/dataProvider';
 
 interface TravelerWizardProps {
   trip: Trip;
@@ -13,6 +16,10 @@ interface TravelerWizardProps {
 
 const TravelerWizard: React.FC<TravelerWizardProps> = ({ trip, initialData, onSave, onCancel }) => {
   const [step, setStep] = useState(1);
+  const [showNewGroupInput, setShowNewGroupInput] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [documents, setDocuments] = useState<any[]>(initialData?.documents || []);
+  const [editingDoc, setEditingDoc] = useState<any>(null);
   const [formData, setFormData] = useState<Partial<Traveler>>({
     tripId: trip.id,
     type: TravelerType.ADULT,
@@ -60,11 +67,100 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ trip, initialData, onSa
              <Input as="select" label="Tipo *" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as any})}>
                 {Object.values(TravelerType).map(t => <option key={t} value={t}>{t}</option>)}
              </Input>
-             <Input as="select" label="Casal / Grupo *" value={formData.coupleId} onChange={e => setFormData({...formData, coupleId: e.target.value})}>
-                {trip.couples.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-             </Input>
-             <Input label="Data de Nascimento" type="date" value={formData.birthDate} onChange={e => setFormData({...formData, birthDate: e.target.value})} />
-             <Input label="WhatsApp (Fone)" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="+55..." />
+             <div>
+               <label className="block text-sm font-medium text-gray-400 mb-2">Casal / Grupo *</label>
+               {!showNewGroupInput ? (
+                 <div className="flex gap-2">
+                   <select 
+                     value={formData.coupleId} 
+                     onChange={e => setFormData({...formData, coupleId: e.target.value})}
+                     className="flex-1 px-4 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                   >
+                     {trip.couples.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                   </select>
+                   <Button 
+                     variant="outline" 
+                     className="text-xs whitespace-nowrap"
+                     onClick={(e) => {
+                       e.preventDefault();
+                       setShowNewGroupInput(true);
+                       setNewGroupName('');
+                     }}
+                   >
+                     + Grupo
+                   </Button>
+                 </div>
+               ) : (
+                 <div className="space-y-2">
+                   <div className="flex gap-2">
+                     <input
+                       type="text"
+                       value={newGroupName}
+                       onChange={e => setNewGroupName(e.target.value)}
+                       placeholder="Nome do novo grupo"
+                       className="flex-1 px-4 py-2.5 bg-gray-950 border border-indigo-500 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-indigo-400 transition-colors"
+                       autoFocus
+                       onKeyDown={async (e) => {
+                         if (e.key === 'Enter' && newGroupName.trim()) {
+                           e.preventDefault();
+                           const newCouple = await dataProvider.saveCouple(trip.id, { name: newGroupName.trim() });
+                           if (newCouple) {
+                             trip.couples.push({ id: newCouple.id, name: newCouple.name, members: [] });
+                             setFormData({...formData, coupleId: newCouple.id});
+                             setShowNewGroupInput(false);
+                             setNewGroupName('');
+                           }
+                         } else if (e.key === 'Escape') {
+                           setShowNewGroupInput(false);
+                           setNewGroupName('');
+                         }
+                       }}
+                     />
+                     <Button 
+                       variant="primary" 
+                       className="text-xs whitespace-nowrap"
+                       disabled={!newGroupName.trim()}
+                       onClick={async (e) => {
+                         e.preventDefault();
+                         if (newGroupName.trim()) {
+                           const newCouple = await dataProvider.saveCouple(trip.id, { name: newGroupName.trim() });
+                           if (newCouple) {
+                             trip.couples.push({ id: newCouple.id, name: newCouple.name, members: [] });
+                             setFormData({...formData, coupleId: newCouple.id});
+                             setShowNewGroupInput(false);
+                             setNewGroupName('');
+                           }
+                         }
+                       }}
+                     >
+                       Criar
+                     </Button>
+                     <Button 
+                       variant="ghost" 
+                       className="text-xs"
+                       onClick={(e) => {
+                         e.preventDefault();
+                         setShowNewGroupInput(false);
+                         setNewGroupName('');
+                       }}
+                     >
+                       ✕
+                     </Button>
+                   </div>
+                   <p className="text-[10px] text-gray-600">Enter para criar, Esc para cancelar</p>
+                 </div>
+               )}
+             </div>
+             <Input label="Data de Nascimento" type="date" value={dateToInput(formData.birthDate)} onChange={e => setFormData({...formData, birthDate: e.target.value})} />
+             <div>
+               <label className="block text-sm font-medium text-gray-400 mb-2">WhatsApp (Fone)</label>
+               <PhoneInput 
+                 value={formData.phone || ''} 
+                 onChange={phone => setFormData({...formData, phone})} 
+                 placeholder="(00) 00000-0000"
+                 className="w-full px-4 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
+               />
+             </div>
              <Input label="Email" className="col-span-1 md:col-span-2" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
           </div>
         )}
@@ -109,23 +205,107 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ trip, initialData, onSa
 
         {step === 3 && (
           <div className="space-y-6 animate-in fade-in duration-300">
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Input as="select" label="Tipo Documento" value={formData.docType} onChange={e => setFormData({...formData, docType: e.target.value as any})}>
-                   {Object.values(DocType).map(d => <option key={d} value={d}>{d}</option>)}
-                </Input>
-                <Input label="Número do Doc" value={formData.docNumber} onChange={e => setFormData({...formData, docNumber: e.target.value})} disabled={formData.docType === DocType.NONE} />
-                <Input label="Vencimento" type="date" value={formData.docExpiry} onChange={e => setFormData({...formData, docExpiry: e.target.value})} disabled={formData.docType === DocType.NONE} />
-             </div>
+             <Card className="!bg-indigo-600/5 !border-indigo-500/20">
+                <p className="text-[10px] text-indigo-400 font-bold uppercase mb-1">Documentação (Opcional)</p>
+                <p className="text-xs text-gray-500">Adicione passaporte, RG, CPF, CNH, vistos e outros documentos para controle.</p>
+             </Card>
              
-             <div className="p-10 border-2 border-dashed border-gray-800 rounded-2xl flex flex-col items-center justify-center text-gray-600 italic">
-                <svg className="w-8 h-8 mb-2 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                <p className="text-xs">Upload de anexos em breve</p>
+             {/* Lista de documentos */}
+             <div className="space-y-2">
+                {documents.map((doc, idx) => (
+                  <div key={idx} className="p-3 bg-gray-950 border border-gray-800 rounded-xl flex items-center justify-between">
+                    <div className="flex-1">
+                      <p className="text-sm font-bold text-white">{doc.docType} - {doc.docNumber}</p>
+                      <p className="text-[10px] text-gray-500">
+                        {doc.issuingCountry && `${doc.issuingCountry} • `}
+                        {doc.docExpiry && `Vence: ${doc.docExpiry}`}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => setEditingDoc(doc)} className="text-indigo-400 hover:text-indigo-300 text-xs">✏️</button>
+                      <button onClick={() => setDocuments(documents.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-300 text-xs">🗑️</button>
+                    </div>
+                  </div>
+                ))}
              </div>
+
+             {/* Formulário de novo documento */}
+             {editingDoc !== null ? (
+               <Card className="!bg-gray-900/50">
+                 <p className="text-xs font-bold text-gray-400 mb-3">{editingDoc.docNumber ? 'Editar Documento' : 'Novo Documento'}</p>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                   <Input 
+                     as="select" 
+                     label="Tipo *" 
+                     value={editingDoc.docType || 'Passaporte'} 
+                     onChange={e => setEditingDoc({...editingDoc, docType: e.target.value})}
+                   >
+                     <option value="Passaporte">Passaporte</option>
+                     <option value="RG">RG</option>
+                     <option value="CPF">CPF</option>
+                     <option value="CNH">CNH</option>
+                     <option value="Visto">Visto</option>
+                     <option value="Outro">Outro</option>
+                   </Input>
+                   <Input 
+                     label="Número *" 
+                     value={editingDoc.docNumber || ''} 
+                     onChange={e => setEditingDoc({...editingDoc, docNumber: e.target.value})}
+                     placeholder="Ex: AB123456"
+                   />
+                   <Input 
+                     label="País Emissor" 
+                     value={editingDoc.issuingCountry || ''} 
+                     onChange={e => setEditingDoc({...editingDoc, issuingCountry: e.target.value})}
+                     placeholder="Ex: Brasil"
+                   />
+                   <Input 
+                     label="Vencimento" 
+                     type="date" 
+                     value={dateToInput(editingDoc.docExpiry)} 
+                     onChange={e => setEditingDoc({...editingDoc, docExpiry: e.target.value})}
+                   />
+                   <Input 
+                     label="Observações" 
+                     className="md:col-span-2"
+                     value={editingDoc.notes || ''} 
+                     onChange={e => setEditingDoc({...editingDoc, notes: e.target.value})}
+                     placeholder="Ex: Visto de turismo válido por 90 dias"
+                   />
+                 </div>
+                 <div className="flex gap-2 mt-4">
+                   <Button 
+                     variant="primary" 
+                     className="flex-1"
+                     disabled={!editingDoc.docType || !editingDoc.docNumber}
+                     onClick={() => {
+                       if (editingDoc.docType && editingDoc.docNumber) {
+                         const existingIdx = documents.findIndex(d => d === editingDoc);
+                         if (existingIdx >= 0) {
+                           const newDocs = [...documents];
+                           newDocs[existingIdx] = editingDoc;
+                           setDocuments(newDocs);
+                         } else {
+                           setDocuments([...documents, editingDoc]);
+                         }
+                         setEditingDoc(null);
+                       }
+                     }}
+                   >
+                     {editingDoc.id ? 'Atualizar' : 'Adicionar'}
+                   </Button>
+                   <Button variant="ghost" onClick={() => setEditingDoc(null)}>Cancelar</Button>
+                 </div>
+               </Card>
+             ) : (
+               <Button variant="outline" className="w-full" onClick={() => setEditingDoc({})}>
+                 + Adicionar Documento
+               </Button>
+             )}
              
-             {/* Card component is imported and used here */}
              <Card className="!bg-amber-600/5 !border-amber-500/20">
                 <p className="text-[10px] text-amber-500 font-bold uppercase mb-1">Aviso de Segurança</p>
-                <p className="text-xs text-gray-500">Documentos são opcionais e usados apenas para controle de expiração e emissão de vouchers pelo organizador.</p>
+                <p className="text-xs text-gray-500">Documentos são usados apenas para controle de expiração e emissão de vouchers pelo organizador.</p>
              </Card>
           </div>
         )}
@@ -139,7 +319,13 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ trip, initialData, onSa
            {step < 3 ? (
              <Button onClick={handleNext} disabled={step === 1 && !isValid}>Próximo</Button>
            ) : (
-             <Button variant="primary" onClick={() => onSave(formData as Traveler)} disabled={!isValid}>Salvar Viajante</Button>
+             <Button 
+               variant="primary" 
+               onClick={() => onSave({...formData, documents} as Traveler)} 
+               disabled={!isValid}
+             >
+               Salvar Viajante
+             </Button>
            )}
         </div>
       </div>

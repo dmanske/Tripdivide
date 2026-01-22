@@ -157,11 +157,24 @@ export interface Traveler {
   birthDate?: string;
   canDrive?: boolean;
   tags?: string[];
-  docType?: DocType;
-  docNumber?: string;
-  docExpiry?: string;
+  docType?: DocType; // Deprecated - manter por compatibilidade
+  docNumber?: string; // Deprecated - manter por compatibilidade
+  docExpiry?: string; // Deprecated - manter por compatibilidade
   notes?: string;
   attachments?: any[];
+  documents?: TravelerDocument[]; // Nova estrutura
+}
+
+export interface TravelerDocument {
+  id?: string;
+  travelerId: string;
+  docType: 'Passaporte' | 'RG' | 'CPF' | 'CNH' | 'Visto' | 'Outro';
+  docNumber: string;
+  docExpiry?: string;
+  issuingCountry?: string; // País emissor
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Segment {

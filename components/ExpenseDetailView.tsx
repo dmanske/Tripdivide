@@ -4,6 +4,7 @@ import { Trip, Expense, ExpenseStatus, Couple, ExpenseSplit, SplitType, Payment,
 import { Card, Badge, Button, Modal, Input } from './CommonUI';
 import { dataProvider } from '../lib/dataProvider';
 import { Money } from '../lib/money';
+import { formatSupabaseDate } from '../lib/formatters';
 
 interface ExpenseDetailViewProps {
   trip: Trip;
@@ -213,7 +214,7 @@ const ExpenseDetailView: React.FC<ExpenseDetailViewProps> = ({ trip, expense, on
                     <tbody className="divide-y divide-gray-800">
                        {payments.map(p => (
                          <tr key={p.id} className="text-sm">
-                            <td className="p-4 text-gray-400">{new Date(p.paidAt).toLocaleDateString('pt-BR')}</td>
+                            <td className="p-4 text-gray-400">{formatSupabaseDate(p.paidAt)}</td>
                             <td className="p-4 text-white font-bold">{trip.couples.find(c => c.id === p.paidByCoupleId)?.name}</td>
                             <td className="p-4"><Badge color="indigo">{p.method.toUpperCase()}</Badge></td>
                             <td className="p-4 text-right font-black text-emerald-400">R$ {Money.format(p.paidAmountBrl)}</td>
