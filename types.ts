@@ -144,7 +144,8 @@ export interface Traveler {
   id: string;
   tripId: string;
   coupleId: string;
-  fullName: string;
+  fullName: string; // Nome para o grupo (não precisa ser como no documento)
+  documentName?: string; // Nome como aparece no documento (opcional, para emissão de vouchers)
   nickname?: string;
   type: TravelerType;
   goesToSegments: string[]; 
@@ -156,11 +157,11 @@ export interface Traveler {
   email?: string;
   birthDate?: string;
   canDrive?: boolean;
-  tags?: string[];
+  tags?: string[]; // Tags estruturadas (chips)
+  notes?: string; // Observações livres
   docType?: DocType; // Deprecated - manter por compatibilidade
   docNumber?: string; // Deprecated - manter por compatibilidade
   docExpiry?: string; // Deprecated - manter por compatibilidade
-  notes?: string;
   attachments?: any[];
   documents?: TravelerDocument[]; // Nova estrutura
 }
@@ -170,6 +171,7 @@ export interface TravelerDocument {
   travelerId: string;
   docType: 'Passaporte' | 'RG' | 'CPF' | 'CNH' | 'Visto' | 'Outro';
   docNumber: string;
+  docNumberLast4?: string; // Últimos 4 dígitos para exibição segura
   docExpiry?: string;
   issuingCountry?: string; // País emissor
   notes?: string;

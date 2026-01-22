@@ -1,7 +1,5 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Trip, Traveler, TravelerType, DocType, Couple } from '../types';
-// Add Card to the imports from CommonUI
 import { Button, Input, Badge, Card } from './CommonUI';
 import PhoneInput from './PhoneInput';
 import { dateToInput } from '../lib/formatters';
@@ -20,6 +18,9 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ trip, initialData, onSa
   const [newGroupName, setNewGroupName] = useState('');
   const [documents, setDocuments] = useState<any[]>(initialData?.documents || []);
   const [editingDoc, setEditingDoc] = useState<any>(null);
+  const [showDocNumber, setShowDocNumber] = useState<Record<number, boolean>>({});
+  const [tagInput, setTagInput] = useState('');
+  
   const [formData, setFormData] = useState<Partial<Traveler>>({
     tripId: trip.id,
     type: TravelerType.ADULT,
@@ -28,11 +29,18 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ trip, initialData, onSa
     isPayer: true,
     canDrive: false,
     tags: [],
-    docType: DocType.NONE,
     status: 'Ativo',
-    attachments: [],
     ...initialData
   });
+
+  // Ajustar defaults baseado no tipo
+  useEffect(() => {
+    if (formData.type === TravelerType.BABY || formData.type === TravelerType.PET) {
+      setFormData(prev => ({ ...prev, isPayer: false, canDrive: false }));
+    } else if (formData.type === TravelerType.ADULT) {
+      setFormData(prev => ({ ...prev, isPayer: true }));
+    }
+  }, [formData.type]);
 
   const steps = [
     { id: 1, title: 'Básico' },
@@ -43,7 +51,35 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ trip, initialData, onSa
   const handleNext = () => setStep(s => Math.min(s + 1, 3));
   const handleBack = () => setStep(s => Math.max(s - 1, 1));
 
-  const isValid = formData.fullName && formData.fullName.trim().length > 0;
+  // Validação do Step 1
+  const isStep1Valid = () => {
+    if (!formData.fullName || !formData.fullName.trim()) return false;
+    if ((formData.type === TravelerType.CHILD || formData.type === TravelerType.BABY) && !formData.birthDate) return false;
+    return true;
+  };
+
+  const maskDocNumber = (docNumber: string) => {
+    if (!docNumber || docNumber.length <= 4) return docNumber;
+    const last4 = docNumber.slice(-4);
+    return `••••${last4}`;
+  };
+
+  const addTag = () => {
+    if (tagInput.trim() && !formData.tags?.includes(tagInput.trim())) {
+      setFormData({
+        ...formData,
+        tags: [...(formData.tags || []), tagInput.trim()]
+      });
+      setTagInput('');
+    }
+  };
+
+  const removeTag = (tag: string) => {
+    setFormData({
+      ...formData,
+      tags: formData.tags?.filter(t => t !== tag)
+    });
+  };
 
   return (
     <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-300">
@@ -60,10 +96,21 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ trip, initialData, onSa
       </div>
 
       <div className="min-h-[300px]">
+        {/* STEP 1: BÁSICO */}
         {step === 1 && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in duration-300">
-             <Input label="Nome Completo *" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} placeholder="Nome como no passaporte" />
-             <Input label="Apelido" value={formData.nickname} onChange={e => setFormData({...formData, nickname: e.target.value})} placeholder="Como o grupo te chama" />
+             <Input 
+               label="Nome Completo *" 
+               value={formData.fullName} 
+               onChange={e => setFormData({...formData, fullName: e.target.value})} 
+               placeholder="Como o grupo conhece" 
+             />
+             <Input 
+               label="Apelido" 
+               value={formData.nickname} 
+               onChange={e => setFormData({...formData, nickname: e.target.value})} 
+               placeholder="Opcional" 
+             />
              <Input as="select" label="Tipo *" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as any})}>
                 {Object.values(TravelerType).map(t => <option key={t} value={t}>{t}</option>)}
              </Input>
@@ -151,7 +198,17 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ trip, initialData, onSa
                  </div>
                )}
              </div>
-             <Input label="Data de Nascimento" type="date" value={dateToInput(formData.birthDate)} onChange={e => setFormData({...formData, birthDate: e.target.value})} />
+             
+             {/* Data de Nascimento - obrigatória para Criança/Bebê */}
+             {formData.type !== TravelerType.PET && (
+               <Input 
+                 label={`Data de Nascimento ${(formData.type === TravelerType.CHILD || formData.type === TravelerType.BABY) ? '*' : ''}`}
+                 type="date" 
+                 value={dateToInput(formData.birthDate)} 
+                 onChange={e => setFormData({...formData, birthDate: e.target.value})} 
+               />
+             )}
+             
              <div>
                <label className="block text-sm font-medium text-gray-400 mb-2">WhatsApp (Fone)</label>
                <PhoneInput 
@@ -161,14 +218,38 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ trip, initialData, onSa
                  className="w-full px-4 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
                />
              </div>
-             <Input label="Email" className="col-span-1 md:col-span-2" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+             <Input 
+               label="Email" 
+               className="col-span-1 md:col-span-2" 
+               value={formData.email} 
+               onChange={e => setFormData({...formData, email: e.target.value})} 
+               placeholder="Recomendado para comunicação"
+             />
           </div>
         )}
 
+        {/* STEP 2: PARTICIPAÇÃO */}
         {step === 2 && (
           <div className="space-y-6 animate-in fade-in duration-300">
              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">Segmentos da Viagem</label>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-sm font-medium text-gray-400">Segmentos da Viagem</label>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setFormData({...formData, goesToSegments: trip.segments.map(s => s.id)})}
+                      className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold uppercase"
+                    >
+                      Marcar todos
+                    </button>
+                    <span className="text-gray-700">•</span>
+                    <button 
+                      onClick={() => setFormData({...formData, goesToSegments: []})}
+                      className="text-[10px] text-gray-500 hover:text-gray-400 font-bold uppercase"
+                    >
+                      Limpar
+                    </button>
+                  </div>
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                    {trip.segments.map(s => (
                      <label key={s.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${formData.goesToSegments?.includes(s.id) ? 'bg-indigo-600/10 border-indigo-500/40 text-white' : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-700'}`}>
@@ -189,25 +270,68 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ trip, initialData, onSa
                       <p className="text-sm font-bold">Viajante Pagante?</p>
                       <p className="text-[10px] text-gray-600 uppercase">Considerar no racha de custos</p>
                    </div>
-                   <input type="checkbox" className="w-6 h-6 accent-emerald-500" checked={formData.isPayer} onChange={e => setFormData({...formData, isPayer: e.target.checked})} />
+                   <input 
+                     type="checkbox" 
+                     className="w-6 h-6 accent-emerald-500" 
+                     checked={formData.isPayer} 
+                     onChange={e => setFormData({...formData, isPayer: e.target.checked})} 
+                     disabled={formData.type === TravelerType.BABY || formData.type === TravelerType.PET}
+                   />
                 </div>
-                <div className="p-4 bg-gray-950 border border-gray-800 rounded-xl flex items-center justify-between">
-                   <div>
-                      <p className="text-sm font-bold">Pode Dirigir?</p>
-                      <p className="text-[10px] text-gray-600 uppercase">CNH Habilitada</p>
-                   </div>
-                   <input type="checkbox" className="w-6 h-6 accent-indigo-500" checked={formData.canDrive} onChange={e => setFormData({...formData, canDrive: e.target.checked})} />
-                </div>
+                
+                {formData.type === TravelerType.ADULT && (
+                  <div className="p-4 bg-gray-950 border border-gray-800 rounded-xl flex items-center justify-between">
+                     <div>
+                        <p className="text-sm font-bold">Pode Dirigir?</p>
+                        <p className="text-[10px] text-gray-600 uppercase">CNH Habilitada</p>
+                     </div>
+                     <input type="checkbox" className="w-6 h-6 accent-indigo-500" checked={formData.canDrive} onChange={e => setFormData({...formData, canDrive: e.target.checked})} />
+                  </div>
+                )}
              </div>
-             <Input as="textarea" label="Tags / Observações de Logística" rows={2} value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Restrições alimentares, prioridades, etc." />
+             
+             {/* Tags estruturadas */}
+             <div>
+               <label className="block text-sm font-medium text-gray-400 mb-2">Tags</label>
+               <div className="flex flex-wrap gap-2 mb-2">
+                 {formData.tags?.map(tag => (
+                   <Badge key={tag} color="indigo" className="flex items-center gap-1">
+                     {tag}
+                     <button onClick={() => removeTag(tag)} className="ml-1 hover:text-red-400">✕</button>
+                   </Badge>
+                 ))}
+               </div>
+               <div className="flex gap-2">
+                 <input
+                   type="text"
+                   value={tagInput}
+                   onChange={e => setTagInput(e.target.value)}
+                   onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addTag())}
+                   placeholder="Ex: Vegetariano, Alergia, Prefere janela"
+                   className="flex-1 px-4 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors text-sm"
+                 />
+                 <Button variant="outline" onClick={addTag} disabled={!tagInput.trim()}>+ Add</Button>
+               </div>
+             </div>
+             
+             {/* Observações livres */}
+             <Input 
+               as="textarea" 
+               label="Observações Livres" 
+               rows={2} 
+               value={formData.notes} 
+               onChange={e => setFormData({...formData, notes: e.target.value})} 
+               placeholder="Detalhes adicionais, restrições, preferências..."
+             />
           </div>
         )}
 
+        {/* STEP 3: DOCUMENTOS */}
         {step === 3 && (
           <div className="space-y-6 animate-in fade-in duration-300">
              <Card className="!bg-indigo-600/5 !border-indigo-500/20">
-                <p className="text-[10px] text-indigo-400 font-bold uppercase mb-1">Documentação (Opcional)</p>
-                <p className="text-xs text-gray-500">Adicione passaporte, RG, CPF, CNH, vistos e outros documentos para controle.</p>
+                <p className="text-[10px] text-indigo-400 font-bold uppercase mb-1">🔒 Documentação (Opcional)</p>
+                <p className="text-xs text-gray-500">Adicione documentos para controle. Números são protegidos e não aparecem completos na listagem.</p>
              </Card>
              
              {/* Lista de documentos */}
@@ -215,7 +339,7 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ trip, initialData, onSa
                 {documents.map((doc, idx) => (
                   <div key={idx} className="p-3 bg-gray-950 border border-gray-800 rounded-xl flex items-center justify-between">
                     <div className="flex-1">
-                      <p className="text-sm font-bold text-white">{doc.docType} - {doc.docNumber}</p>
+                      <p className="text-sm font-bold text-white">{doc.docType} - {maskDocNumber(doc.docNumber)}</p>
                       <p className="text-[10px] text-gray-500">
                         {doc.issuingCountry && `${doc.issuingCountry} • `}
                         {doc.docExpiry && `Vence: ${doc.docExpiry}`}
@@ -247,12 +371,24 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ trip, initialData, onSa
                      <option value="Visto">Visto</option>
                      <option value="Outro">Outro</option>
                    </Input>
-                   <Input 
-                     label="Número *" 
-                     value={editingDoc.docNumber || ''} 
-                     onChange={e => setEditingDoc({...editingDoc, docNumber: e.target.value})}
-                     placeholder="Ex: AB123456"
-                   />
+                   <div>
+                     <label className="block text-sm font-medium text-gray-400 mb-2">Número *</label>
+                     <div className="flex gap-2">
+                       <input
+                         type={showDocNumber[documents.indexOf(editingDoc)] ? 'text' : 'password'}
+                         value={editingDoc.docNumber || ''}
+                         onChange={e => setEditingDoc({...editingDoc, docNumber: e.target.value})}
+                         placeholder="Ex: AB123456"
+                         className="flex-1 px-4 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                       />
+                       <button
+                         onClick={() => setShowDocNumber({...showDocNumber, [documents.indexOf(editingDoc)]: !showDocNumber[documents.indexOf(editingDoc)]})}
+                         className="px-3 text-gray-500 hover:text-gray-300"
+                       >
+                         {showDocNumber[documents.indexOf(editingDoc)] ? '🙈' : '👁️'}
+                       </button>
+                     </div>
+                   </div>
                    <Input 
                      label="País Emissor" 
                      value={editingDoc.issuingCountry || ''} 
@@ -304,8 +440,8 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ trip, initialData, onSa
              )}
              
              <Card className="!bg-amber-600/5 !border-amber-500/20">
-                <p className="text-[10px] text-amber-500 font-bold uppercase mb-1">Aviso de Segurança</p>
-                <p className="text-xs text-gray-500">Documentos são usados apenas para controle de expiração e emissão de vouchers pelo organizador.</p>
+                <p className="text-[10px] text-amber-500 font-bold uppercase mb-1">🔒 Dados Protegidos</p>
+                <p className="text-xs text-gray-500">Números de documentos são criptografados e só aparecem mascarados (••••1234) nas listagens.</p>
              </Card>
           </div>
         )}
@@ -317,12 +453,12 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ trip, initialData, onSa
         </Button>
         <div className="flex gap-2">
            {step < 3 ? (
-             <Button onClick={handleNext} disabled={step === 1 && !isValid}>Próximo</Button>
+             <Button onClick={handleNext} disabled={step === 1 && !isStep1Valid()}>Próximo</Button>
            ) : (
              <Button 
                variant="primary" 
                onClick={() => onSave({...formData, documents} as Traveler)} 
-               disabled={!isValid}
+               disabled={!isStep1Valid()}
              >
                Salvar Viajante
              </Button>

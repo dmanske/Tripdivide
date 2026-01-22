@@ -192,6 +192,7 @@ export const supabaseDataProvider = {
       tripId: t.trip_id,
       coupleId: t.couple_id,
       fullName: t.full_name,
+      documentName: t.document_name,
       nickname: t.nickname,
       type: t.type,
       goesToSegments: t.goes_to_segments || [],
@@ -206,6 +207,7 @@ export const supabaseDataProvider = {
       docType: t.doc_type,
       docNumber: t.doc_number,
       docExpiry: t.doc_expiry,
+      tags: t.tags,
       notes: t.notes
     }));
   },
@@ -218,6 +220,7 @@ export const supabaseDataProvider = {
         .update({
           couple_id: traveler.coupleId,
           full_name: traveler.fullName,
+          document_name: traveler.documentName,
           nickname: traveler.nickname,
           type: traveler.type,
           goes_to_segments: traveler.goesToSegments,
@@ -229,6 +232,7 @@ export const supabaseDataProvider = {
           doc_type: traveler.docType,
           doc_number: traveler.docNumber,
           doc_expiry: traveler.docExpiry,
+          tags: traveler.tags,
           notes: traveler.notes,
           updated_at: new Date().toISOString()
         })
@@ -244,6 +248,7 @@ export const supabaseDataProvider = {
         tripId: data.trip_id,
         coupleId: data.couple_id,
         fullName: data.full_name,
+        documentName: data.document_name,
         nickname: data.nickname,
         type: data.type,
         goesToSegments: data.goes_to_segments || [],
@@ -258,6 +263,7 @@ export const supabaseDataProvider = {
         docType: data.doc_type,
         docNumber: data.doc_number,
         docExpiry: data.doc_expiry,
+        tags: data.tags,
         notes: data.notes
       };
     } else {
@@ -268,6 +274,7 @@ export const supabaseDataProvider = {
           trip_id: traveler.tripId,
           couple_id: traveler.coupleId,
           full_name: traveler.fullName,
+          document_name: traveler.documentName,
           nickname: traveler.nickname,
           type: traveler.type,
           goes_to_segments: traveler.goesToSegments,
@@ -279,6 +286,7 @@ export const supabaseDataProvider = {
           doc_type: traveler.docType,
           doc_number: traveler.docNumber,
           doc_expiry: traveler.docExpiry,
+          tags: traveler.tags,
           notes: traveler.notes,
           status: 'Ativo'
         })
@@ -293,6 +301,7 @@ export const supabaseDataProvider = {
         tripId: data.trip_id,
         coupleId: data.couple_id,
         fullName: data.full_name,
+        documentName: data.document_name,
         nickname: data.nickname,
         type: data.type,
         goesToSegments: data.goes_to_segments || [],
@@ -307,6 +316,7 @@ export const supabaseDataProvider = {
         docType: data.doc_type,
         docNumber: data.doc_number,
         docExpiry: data.doc_expiry,
+        tags: data.tags,
         notes: data.notes
       };
     }
@@ -336,6 +346,7 @@ export const supabaseDataProvider = {
       travelerId: d.traveler_id,
       docType: d.doc_type,
       docNumber: d.doc_number,
+      docNumberLast4: d.doc_number_last4,
       docExpiry: d.doc_expiry,
       issuingCountry: d.issuing_country,
       notes: d.notes,
@@ -368,6 +379,7 @@ export const supabaseDataProvider = {
         travelerId: data.traveler_id,
         docType: data.doc_type,
         docNumber: data.doc_number,
+        docNumberLast4: data.doc_number_last4,
         docExpiry: data.doc_expiry,
         issuingCountry: data.issuing_country,
         notes: data.notes,
@@ -396,6 +408,7 @@ export const supabaseDataProvider = {
         travelerId: data.traveler_id,
         docType: data.doc_type,
         docNumber: data.doc_number,
+        docNumberLast4: data.doc_number_last4,
         docExpiry: data.doc_expiry,
         issuingCountry: data.issuing_country,
         notes: data.notes,
