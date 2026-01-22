@@ -93,7 +93,13 @@ export const dateToInput = (date: string | Date | null | undefined): string => {
 export const parseSupabaseDate = (timestamp: string | null | undefined): Date | null => {
   if (!timestamp) return null;
   
-  // Supabase retorna timestamps em UTC, precisamos converter para local
+  // Se é uma data sem hora (YYYY-MM-DD), trata como data local para evitar conversão UTC
+  if (typeof timestamp === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(timestamp)) {
+    const [year, month, day] = timestamp.split('-').map(Number);
+    return new Date(year, month - 1, day); // Cria data local sem conversão UTC
+  }
+  
+  // Para timestamps com hora, usa conversão normal
   const date = new Date(timestamp);
   return isNaN(date.getTime()) ? null : date;
 };

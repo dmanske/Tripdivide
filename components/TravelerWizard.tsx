@@ -4,6 +4,7 @@ import { Button, Input, Badge, Card } from './CommonUI';
 import PhoneInput from './PhoneInput';
 import { dateToInput } from '../lib/formatters';
 import { dataProvider } from '../lib/dataProvider';
+import DocumentDrawer from './DocumentDrawer';
 
 // Funções de formatação de documentos
 const formatDocNumber = (value: string, docType: string): string => {
@@ -57,6 +58,7 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ trip, initialData, onSa
   const [showNewGroupInput, setShowNewGroupInput] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [documents, setDocuments] = useState<any[]>([]);
+  const [selectedDoc, setSelectedDoc] = useState<any>(null);
   const [editingDoc, setEditingDoc] = useState<any>(null);
   const [editingDocIndex, setEditingDocIndex] = useState<number>(-1);
   const [showDocNumber, setShowDocNumber] = useState(true); // Mostrar por padrão
