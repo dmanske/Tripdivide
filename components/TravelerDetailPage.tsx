@@ -341,75 +341,25 @@ const TravelerDetailPage: React.FC<TravelerDetailPageProps> = ({ trip, travelerI
         </div>
       </div>
 
-      {/* Layout 2 colunas */}
-      <div className="max-w-[1600px] mx-auto px-8 py-6 grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* COLUNA ESQUERDA - RESUMO COMPACTO */}
-        <div className="lg:col-span-1">
-          <Card className="!p-5">
-            {/* Pendências */}
-            {issues.length > 0 && (
-              <div className="mb-5 p-3 bg-amber-600/10 rounded-lg border border-amber-600/20">
-                <p className="text-[10px] font-black text-amber-500 uppercase mb-2">⚠️ {issues.length} Pendência{issues.length > 1 ? 's' : ''}</p>
-                <div className="space-y-1">
-                  {issues.map((issue, idx) => (
-                    <p key={idx} className="text-[11px] text-amber-400 leading-tight">{issue.message}</p>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Segmentos */}
-            <div className="mb-5">
-              <p className="text-[10px] font-black text-gray-500 uppercase mb-3">Segmentos</p>
-              <div className="flex flex-wrap gap-1">
-                {(traveler.goesToSegments || []).length > 0 ? (
-                  (traveler.goesToSegments || []).map(sid => {
-                    const seg = trip.segments.find(s => s.id === sid);
-                    return (
-                      <span key={sid} className="text-[9px] px-2 py-0.5 bg-indigo-600/10 text-indigo-400 rounded uppercase font-bold border border-indigo-600/20">
-                        {seg?.name}
-                      </span>
-                    );
-                  })
-                ) : (
-                  <span className="text-[11px] text-gray-600 italic">Sem segmentos</span>
-                )}
-              </div>
+      {/* Layout - Apenas área de documentos (full width) */}
+      <div className="max-w-[1600px] mx-auto px-8 py-6">
+        {/* Pendências (se houver) */}
+        {issues.length > 0 && (
+          <div className="mb-6 p-4 bg-amber-600/10 rounded-xl border border-amber-600/20">
+            <p className="text-xs font-black text-amber-500 uppercase mb-3">⚠️ {issues.length} Pendência{issues.length > 1 ? 's' : ''}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+              {issues.map((issue, idx) => (
+                <p key={idx} className="text-xs text-amber-400 leading-tight">• {issue.message}</p>
+              ))}
             </div>
+          </div>
+        )}
 
-            {/* Participação */}
-            <div>
-              <p className="text-[10px] font-black text-gray-500 uppercase mb-3">Participação</p>
-              <div className="flex gap-2">
-                {traveler.isPayer && (
-                  <span className="text-[9px] px-2 py-1 bg-emerald-600/10 text-emerald-400 rounded uppercase font-bold border border-emerald-600/20">
-                    Pagante
-                  </span>
-                )}
-                {traveler.canDrive && (
-                  <span className="text-[9px] px-2 py-1 bg-blue-600/10 text-blue-400 rounded uppercase font-bold border border-blue-600/20">
-                    Dirige
-                  </span>
-                )}
-                {!traveler.isPayer && !traveler.canDrive && (
-                  <span className="text-[11px] text-gray-600 italic">Nenhuma</span>
-                )}
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        {/* COLUNA DIREITA - DOCUMENTOS (ÁREA PRINCIPAL) */}
-        <div className="lg:col-span-3">
-          <Card className="!p-5">
-            {/* Header compacto */}
+        {/* ÁREA DE DOCUMENTOS - div simples para ocupar largura total */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+            {/* Header compacto - sem botão duplicado */}
             <div className="mb-4">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg font-black text-white uppercase">Documentos</h2>
-                <Button variant="primary" size="sm" onClick={handleAddNewDocument}>
-                  + Adicionar
-                </Button>
-              </div>
+              <h2 className="text-lg font-black text-white uppercase mb-3">Documentos</h2>
 
               {/* Filtros compactos */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
@@ -512,8 +462,7 @@ const TravelerDetailPage: React.FC<TravelerDetailPageProps> = ({ trip, travelerI
                 )}
               </div>
             )}
-          </Card>
-        </div>
+          </div>
       </div>
 
       {/* Modais */}
