@@ -61,7 +61,7 @@ const TripWizard: React.FC<TripWizardProps> = ({ onClose, onSave }) => {
   };
 
   return (
-    <Modal onClose={onClose} size="lg">
+    <Modal isOpen={true} onClose={onClose} size="lg">
       <div className="p-6">
         {/* Header */}
         <div className="mb-6">

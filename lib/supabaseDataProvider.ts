@@ -62,14 +62,18 @@ export const supabaseDataProvider = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Usuário não autenticado');
 
+    // Converter strings vazias para null
+    const startDate = trip.startDate && trip.startDate.trim() ? trip.startDate : null;
+    const endDate = trip.endDate && trip.endDate.trim() ? trip.endDate : null;
+
     if (trip.id) {
       // Update
       const { data, error } = await supabase
         .from('td_trips')
         .update({
           name: trip.name,
-          start_date: trip.startDate,
-          end_date: trip.endDate,
+          start_date: startDate,
+          end_date: endDate,
           consensus_rule: trip.consensusRule,
           categories: trip.categories,
           status: trip.status,
@@ -92,8 +96,8 @@ export const supabaseDataProvider = {
         .insert({
           user_id: user.id,
           name: trip.name,
-          start_date: trip.startDate,
-          end_date: trip.endDate,
+          start_date: startDate,
+          end_date: endDate,
           consensus_rule: trip.consensusRule || '2/3',
           categories: trip.categories || ['Voo', 'Hospedagem', 'Aluguel de Carro', 'Restaurantes', 'Diversos'],
           status: trip.status || 'active',
@@ -299,13 +303,17 @@ export const supabaseDataProvider = {
   },
 
   saveSegment: async (segment: any) => {
+    // Converter strings vazias para null
+    const startDate = segment.startDate && segment.startDate.trim() ? segment.startDate : null;
+    const endDate = segment.endDate && segment.endDate.trim() ? segment.endDate : null;
+
     if (segment.id) {
       const { data, error } = await supabase
         .from('td_segments')
         .update({
           name: segment.name,
-          start_date: segment.startDate,
-          end_date: segment.endDate
+          start_date: startDate,
+          end_date: endDate
         })
         .eq('id', segment.id)
         .select()
@@ -319,8 +327,8 @@ export const supabaseDataProvider = {
         .insert({
           trip_id: segment.tripId,
           name: segment.name,
-          start_date: segment.startDate,
-          end_date: segment.endDate
+          start_date: startDate,
+          end_date: endDate
         })
         .select()
         .single();

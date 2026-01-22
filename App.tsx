@@ -22,6 +22,7 @@ import LandingHero from './components/LandingHero';
 import HowItWorks from './components/HowItWorks';
 import TripList from './components/TripList';
 import TripWizard from './components/TripWizard';
+import TripDashboard from './components/TripDashboard';
 import { Trip, Quote, Expense, Vendor } from './types';
 import { dataProvider } from './lib/dataProvider';
 import { supabaseDataProvider } from './lib/supabaseDataProvider';
@@ -52,7 +53,7 @@ const App: React.FC = () => {
   const [activeTripId, setActiveTripId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showTripWizard, setShowTripWizard] = useState(false);
-
+  const [authMode, setAuthMode] = useState<'signup' | 'login'>('login');
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -161,6 +162,8 @@ const App: React.FC = () => {
   useEffect(() => {
     if (user) {
       loadData();
+      // Se o usuário está logado, sair da landing page
+      setShowLanding(false);
     }
   }, [user]);
 
@@ -168,67 +171,153 @@ const App: React.FC = () => {
     return <div className="min-h-screen bg-gray-950 flex items-center justify-center text-gray-500 animate-pulse font-black uppercase tracking-widest italic">Carregando...</div>;
   }
 
-  // Show landing page if not logged in
-  if (!user) {
-    if (showLanding) {
-      return (
-        <main className="bg-[#02040a]">
-          <LandingHero
-            onCreateTrip={() => setShowLanding(false)}
-            hasTrip={false}
-            onEnter={() => setShowLanding(false)}
-          />
-          <HowItWorks />
-        </main>
-      );
-    }
-    return <Auth onSuccess={() => setAuthLoading(false)} />;
-  }
-
-  if (loading) {
-    return <div className="min-h-screen bg-gray-950 flex items-center justify-center text-gray-500 animate-pulse font-black uppercase tracking-widest italic">Iniciando TripDivide...</div>;
-  }
-
   const handleCreateInitialTrip = async () => {
-    setShowTripWizard(true);
+    // Se não estiver logado, mostrar tela de cadastro
+    if (!user) {
+      setAuthMode('signup');
+      setShowLanding(false);
+      return;
+    }
+    // Se já estiver logado, apenas sair da landing e ir para o app
+    setShowLanding(false);
   };
 
-  const handleTripChange = async (tripId: string) => {
+  const handleTripChange = async (tripId: string, forceNavigateToDashboard: boolean = false) => {
     await loadData(tripId);
-    setView({ type: 'dashboard' });
+    // Se forceNavigateToDashboard for true (ex: ao abrir viagem da lista), vai para dashboard
+    // Caso contrário, mantém a view atual (ex: ao trocar viagem estando em Orçamentos)
+    if (forceNavigateToDashboard) {
+      setView({ type: 'dashboard' });
+    }
+    // Se não forçar, mantém a view atual (view não muda)
   };
 
   const handleCreateTrip = () => {
     setShowTripWizard(true);
   };
 
-  if (showLanding) {
-    return (
-      <main className="bg-[#02040a]">
-        <LandingHero
-          onCreateTrip={handleCreateInitialTrip}
-          hasTrip={!!trip}
-          onEnter={() => setShowLanding(false)}
-        />
-        <HowItWorks />
-      </main>
-    );
+  // Show landing page if not logged in
+  if (!user) {
+    if (showLanding) {
+      return (
+        <>
+          <main className="bg-[#02040a]">
+            <LandingHero
+              onCreateTrip={handleCreateInitialTrip}
+              hasTrip={false}
+              onEnter={() => setShowLanding(false)}
+            />
+            <HowItWorks />
+          </main>
+        </>
+      );
+    }
+    return <Auth onSuccess={() => setAuthLoading(false)} initialMode={authMode} />;
   }
 
-  if (!trip) {
+  if (loading) {
+    return <div className="min-h-screen bg-gray-950 flex items-center justify-center text-gray-500 animate-pulse font-black uppercase tracking-widest italic">Iniciando TripDivide...</div>;
+  }
+
+  if (showLanding) {
     return (
-      <main className="bg-[#02040a]">
-        <LandingHero onCreateTrip={handleCreateInitialTrip} hasTrip={false} />
-        <HowItWorks />
-      </main>
+      <>
+        <main className="bg-[#02040a]">
+          <LandingHero
+            onCreateTrip={handleCreateInitialTrip}
+            hasTrip={!!trip}
+            onEnter={() => setShowLanding(false)}
+          />
+          <HowItWorks />
+        </main>
+        
+        {/* Trip Wizard */}
+        {showTripWizard && (
+          <TripWizard
+            onClose={() => setShowTripWizard(false)}
+            onSave={async (tripData) => {
+              const newTrip = await supabaseDataProvider.saveTrip(tripData);
+              
+              // Create default segment
+              await dataProvider.saveSegment({
+                tripId: newTrip.id,
+                name: 'Geral',
+                startDate: '',
+                endDate: ''
+              });
+
+              setShowTripWizard(false);
+              setShowLanding(false);
+              await loadData(newTrip.id);
+              setView({ type: 'dashboard' });
+            }}
+          />
+        )}
+      </>
     );
   }
 
   const navigateTo = (tab: string) => setView({ type: tab as any });
 
+  // Se não tem viagem, mostrar tela vazia com opção de criar
+  if (!trip) {
+    return (
+      <Layout 
+        activeTab="dashboard" 
+        setActiveTab={navigateTo} 
+        tripId={null}
+        tripName="Sem viagem" 
+        userEmail={user?.email}
+        onTripChange={handleTripChange}
+        onCreateTrip={handleCreateTrip}
+      >
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-6">
+          <div className="max-w-md space-y-6">
+            <div className="text-6xl mb-4">🌍</div>
+            <h2 className="text-3xl font-black text-white uppercase tracking-tight">
+              Nenhuma viagem criada
+            </h2>
+            <p className="text-gray-400 text-lg">
+              Crie sua primeira viagem para começar a organizar cotações, despesas e viajantes.
+            </p>
+            <Button
+              variant="primary"
+              onClick={handleCreateTrip}
+              className="!px-8 !py-4 !text-lg font-black uppercase"
+            >
+              + Criar Primeira Viagem
+            </Button>
+          </div>
+        </div>
+        
+        {/* Trip Wizard */}
+        {showTripWizard && (
+          <TripWizard
+            onClose={() => setShowTripWizard(false)}
+            onSave={async (tripData) => {
+              const newTrip = await supabaseDataProvider.saveTrip(tripData);
+              
+              // Create default segment
+              await dataProvider.saveSegment({
+                tripId: newTrip.id,
+                name: 'Geral',
+                startDate: '',
+                endDate: ''
+              });
+
+              setShowTripWizard(false);
+              await loadData(newTrip.id);
+              setView({ type: 'dashboard' });
+            }}
+          />
+        )}
+      </Layout>
+    );
+  }
+
   const renderContent = () => {
     switch (view.type) {
-      case 'dashboard': return <Dashboard trip={trip} quotes={quotes} expenses={expenses} onNavigate={navigateTo} onRefresh={loadData} />;
+      case 'dashboard': return <TripDashboard trip={trip} quotes={quotes} expenses={expenses} onNavigate={navigateTo} onRefresh={loadData} />;
       case 'trips': return <TripList onNavigateToTrip={handleTripChange} onRefresh={loadData} />;
       case 'travelers': return <TravelerList trip={trip} onRefresh={loadData} onNavigateToDetail={(id) => setView({ type: 'traveler-detail', id })} />;
       case 'traveler-detail': return <TravelerDetailPage trip={trip} travelerId={view.id} onBack={() => setView({ type: 'travelers' })} onRefresh={loadData} />;
@@ -304,9 +393,6 @@ const App: React.FC = () => {
           onClose={() => setShowTripWizard(false)}
           onSave={async (tripData) => {
             const newTrip = await supabaseDataProvider.saveTrip(tripData);
-            
-            // Create default couple
-            await dataProvider.saveCouple(newTrip.id, { name: 'Grupo Principal' });
             
             // Create default segment
             await dataProvider.saveSegment({

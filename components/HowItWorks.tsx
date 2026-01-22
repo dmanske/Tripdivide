@@ -12,30 +12,30 @@ const steps = [
   },
   {
     number: '02',
-    title: 'Casais e Viajantes',
-    benefit: 'Saiba exatamente quem participa de cada item.',
-    bullets: ['Cadastre casais e dependentes', 'Configure quem dirige ou paga'],
+    title: 'Grupos e Viajantes',
+    benefit: 'Gestão completa de participantes.',
+    bullets: ['Organize por grupos/famílias', 'Cadastre documentos (passaporte, RG, visto)', 'Alertas de vencimento automáticos'],
     icon: '👥'
   },
   {
     number: '03',
     title: 'Cotações Inteligentes',
     benefit: 'Centralize tudo, do manual ao WhatsApp.',
-    bullets: ['Cole textos brutos do WhatsApp', 'Anexe links e validade de preço'],
+    bullets: ['Cole textos brutos do WhatsApp', 'Anexe links e validade de preço', 'Compare lado a lado'],
     icon: '📑'
   },
   {
     number: '04',
     title: 'Votação e Consenso',
     benefit: 'Decisões democráticas e rápidas.',
-    bullets: ['Compare opções lado a lado', 'Vote e oficialize o vencedor'],
+    bullets: ['Compare opções lado a lado', 'Vote e oficialize o vencedor', 'Histórico de decisões'],
     icon: '⚖️'
   },
   {
     number: '05',
     title: 'Fechamento e Acerto',
     benefit: 'Paz financeira com centavos exatos.',
-    bullets: ['Gere reembolsos automáticos', 'Acompanhe quem já pagou o quê'],
+    bullets: ['Gere reembolsos automáticos', 'Acompanhe quem já pagou o quê', 'Rastreie cada transação'],
     icon: '💸'
   }
 ];
@@ -78,16 +78,16 @@ const features = [
     bullets: ['Cotações em USD, BRL ou outras', 'Conversão automática para comparação']
   },
   {
+    icon: '📄',
+    title: 'Gestão de Documentos',
+    benefit: 'Nunca mais perca um visto vencido.',
+    bullets: ['Cadastre passaportes, vistos, RG, CNH', 'Alertas de vencimento automáticos', 'Criptografia de números sensíveis']
+  },
+  {
     icon: '👨‍👩‍👧',
     title: 'Racha Flexível',
     benefit: 'Divida do seu jeito.',
-    bullets: ['Por casal, pessoa ou percentual', 'Crianças com peso diferenciado']
-  },
-  {
-    icon: '📊',
-    title: 'Auditoria Completa',
-    benefit: 'Transparência bancária para o grupo.',
-    bullets: ['Histórico imutável de tudo', 'Rastreie cada votação e pagamento']
+    bullets: ['Por grupo, pessoa ou percentual', 'Crianças com peso diferenciado']
   }
 ];
 

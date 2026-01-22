@@ -11,7 +11,7 @@ interface LayoutProps {
   tripId: string | null;
   tripName: string;
   userEmail?: string;
-  onTripChange: (tripId: string) => void;
+  onTripChange: (tripId: string, forceNavigateToDashboard?: boolean) => void;
   onCreateTrip: () => void;
 }
 

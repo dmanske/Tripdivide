@@ -4,13 +4,14 @@ import { Button, Card } from './CommonUI';
 
 interface AuthProps {
   onSuccess: () => void;
+  initialMode?: 'signup' | 'login';
 }
 
-const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
+const Auth: React.FC<AuthProps> = ({ onSuccess, initialMode = 'login' }) => {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(initialMode === 'signup');
   const [message, setMessage] = useState('');
 
   const handleAuth = async (e: React.FormEvent) => {

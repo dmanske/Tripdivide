@@ -5,7 +5,7 @@ import { ICONS } from '../constants';
 import TripWizard from './TripWizard';
 
 interface TripListProps {
-  onNavigateToTrip: (tripId: string) => void;
+  onNavigateToTrip: (tripId: string, forceNavigateToDashboard?: boolean) => void;
   onRefresh: () => void;
 }
 
@@ -67,7 +67,7 @@ const TripList: React.FC<TripListProps> = ({ onNavigateToTrip, onRefresh }) => {
   const handleSetActive = async (tripId: string) => {
     try {
       await supabaseDataProvider.setActiveTrip(tripId);
-      onNavigateToTrip(tripId);
+      onNavigateToTrip(tripId, true); // true = forçar navegação para dashboard
       onRefresh();
     } catch (error) {
       console.error('Erro ao definir viagem ativa:', error);
@@ -181,11 +181,10 @@ const TripList: React.FC<TripListProps> = ({ onNavigateToTrip, onRefresh }) => {
                       <Button onClick={() => handleArchive(trip.id)} className="bg-gray-800 hover:bg-gray-700 text-xs">
                         Arquivar
                       </Button>
-                    ) : (
-                      <Button onClick={() => setConfirmDelete(trip.id)} className="bg-red-600/20 hover:bg-red-600/30 text-red-400 text-xs">
-                        Excluir
-                      </Button>
-                    )}
+                    ) : null}
+                    <Button onClick={() => setConfirmDelete(trip.id)} className="bg-red-600/20 hover:bg-red-600/30 text-red-400 text-xs">
+                      Excluir
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -212,7 +211,7 @@ const TripList: React.FC<TripListProps> = ({ onNavigateToTrip, onRefresh }) => {
 
       {/* Confirmação de exclusão */}
       {confirmDelete && (
-        <Modal onClose={() => setConfirmDelete(null)}>
+        <Modal isOpen={true} onClose={() => setConfirmDelete(null)}>
           <div className="p-6">
             <h3 className="text-xl font-bold text-white mb-4">Confirmar Exclusão</h3>
             <p className="text-gray-400 mb-6">Tem certeza que deseja excluir esta viagem? Esta ação não pode ser desfeita.</p>

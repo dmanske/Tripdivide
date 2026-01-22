@@ -6,7 +6,7 @@ import { ICONS } from '../constants';
 interface TripSwitcherProps {
   currentTripId: string | null;
   currentTripName: string;
-  onTripChange: (tripId: string) => void;
+  onTripChange: (tripId: string, forceNavigateToDashboard?: boolean) => void;
   onCreateNew: () => void;
 }
 
@@ -53,7 +53,7 @@ const TripSwitcher: React.FC<TripSwitcherProps> = ({ currentTripId, currentTripN
   const handleSelectTrip = async (tripId: string) => {
     try {
       await supabaseDataProvider.setActiveTrip(tripId);
-      onTripChange(tripId);
+      onTripChange(tripId, false); // false = não forçar navegação, mantém tela atual
       setIsOpen(false);
     } catch (error) {
       console.error('Erro ao trocar viagem:', error);
