@@ -1,7 +1,10 @@
 
 import React from 'react';
 
-export const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'outline' }> = ({ children, variant = 'primary', className = '', ...props }) => {
+export const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { 
+  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'outline';
+  size?: 'sm' | 'md' | 'lg';
+}> = ({ children, variant = 'primary', size = 'md', className = '', ...props }) => {
   const variants = {
     primary: 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-500/20',
     secondary: 'bg-gray-800 hover:bg-gray-700 text-gray-100 border border-gray-700',
@@ -9,9 +12,15 @@ export const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { 
     ghost: 'bg-transparent hover:bg-gray-800 text-gray-400 hover:text-white',
     outline: 'bg-transparent border border-indigo-500/50 hover:border-indigo-500 text-indigo-400'
   };
+  
+  const sizes = {
+    sm: 'px-3 py-1.5 text-xs',
+    md: 'px-4 py-2 text-sm',
+    lg: 'px-6 py-3 text-base'
+  };
 
   return (
-    <button className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${className}`} {...props}>
+    <button className={`rounded-lg font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className}`} {...props}>
       {children}
     </button>
   );
@@ -37,18 +46,46 @@ export const Card: React.FC<React.HTMLAttributes<HTMLDivElement> & { children: R
   </div>
 );
 
-export const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: string; children: React.ReactNode }> = ({ isOpen, onClose, title, children }) => {
+export const Modal: React.FC<{ 
+  isOpen: boolean; 
+  onClose: () => void; 
+  title: string; 
+  children: React.ReactNode;
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
+}> = ({ isOpen, onClose, title, children, size = 'md' }) => {
   if (!isOpen) return null;
+  
+  const sizes = {
+    sm: 'max-w-md',
+    md: 'max-w-2xl',
+    lg: 'max-w-4xl',
+    xl: 'max-w-6xl',
+    full: 'max-w-[95vw]'
+  };
+  
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className="bg-gray-900 border border-gray-800 w-full max-w-2xl rounded-2xl shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-          <h2 className="text-xl font-bold">{title}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <div 
+        className={`bg-gray-900 border border-gray-800 w-full ${sizes[size]} rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 bg-gray-900/50">
+          <h2 className="text-xl font-black text-white uppercase tracking-tight">{title}</h2>
+          <button 
+            onClick={onClose} 
+            className="text-gray-500 hover:text-white transition-colors p-1 hover:bg-gray-800 rounded-lg"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </div>
-        <div className="p-6 max-h-[80vh] overflow-y-auto">{children}</div>
+        <div className="p-6 max-h-[80vh] overflow-y-auto">
+          {children}
+        </div>
       </div>
     </div>
   );

@@ -3,6 +3,17 @@ import { Button, Input, Badge } from './CommonUI';
 import { dateToInput } from '../lib/formatters';
 import { dataProvider } from '../lib/dataProvider';
 
+// Ícones por tipo de documento
+const DOC_ICONS: Record<string, string> = {
+  'Passaporte': '🛂',
+  'RG': '🪪',
+  'CPF': '📄',
+  'CNH': '🚗',
+  'Visto': '🌍',
+  'ESTA': '✈️',
+  'Outro': '📋'
+};
+
 interface DocumentDrawerProps {
   document: any;
   passports: any[]; // Para vincular vistos
@@ -48,18 +59,18 @@ const DocumentDrawer: React.FC<DocumentDrawerProps> = ({
   onUpdateNumber,
   isNewDocument = false
 }) => {
-  const [isEditing, setIsEditing] = useState(isNewDocument); // Se é novo, já abre em modo edição
+  const [isEditing, setIsEditing] = useState(isNewDocument);
   const [isUpdatingNumber, setIsUpdatingNumber] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [newNumber, setNewNumber] = useState('');
   const [showNewNumber, setShowNewNumber] = useState(true);
-  const [hasChanges, setHasChanges] = useState(isNewDocument); // Se é novo, já marca como tendo mudanças
+  const [hasChanges, setHasChanges] = useState(isNewDocument);
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
   const [editedDoc, setEditedDoc] = useState(document);
 
   useEffect(() => {
     setEditedDoc(document);
-    setIsEditing(isNewDocument); // Reseta modo de edição baseado em isNewDocument
+    setIsEditing(isNewDocument);
     setHasChanges(isNewDocument);
   }, [document, isNewDocument]);
 
@@ -117,21 +128,32 @@ const DocumentDrawer: React.FC<DocumentDrawerProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/50 animate-in fade-in duration-200">
-      <div className="w-full max-w-2xl h-full bg-gray-900 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+      onClick={handleClose}
+    >
+      <div 
+        className="bg-gray-900 border border-gray-800 w-full max-w-3xl rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="p-6 border-b border-gray-800 flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-black text-white">{editedDoc.docType}</h2>
-            <p className="text-sm text-gray-500">
-              {isEditing ? 'Modo de edição' : 'Visualização'}
-            </p>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 bg-gray-900/50">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">{DOC_ICONS[editedDoc.docType] || '📄'}</span>
+            <div>
+              <h2 className="text-xl font-black text-white uppercase tracking-tight">{editedDoc.docType}</h2>
+              <p className="text-xs text-gray-500">
+                {isNewDocument ? 'Novo documento' : isEditing ? 'Modo de edição' : 'Visualização'}
+              </p>
+            </div>
           </div>
           <button 
             onClick={handleClose}
-            className="text-gray-500 hover:text-white transition-colors"
+            className="text-gray-500 hover:text-white transition-colors p-1 hover:bg-gray-800 rounded-lg"
           >
-            ✕
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </div>
 
@@ -139,7 +161,7 @@ const DocumentDrawer: React.FC<DocumentDrawerProps> = ({
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Aviso de alterações não salvas */}
           {showUnsavedWarning && (
-            <div className="p-4 bg-amber-600/10 rounded-xl border border-amber-600/20 space-y-3">
+            <div className="p-4 bg-amber-600/10 rounded-xl border border-amber-600/20 space-y-3 animate-in slide-in-from-top-2">
               <p className="text-sm text-amber-400 font-bold">
                 ⚠️ Você tem alterações não salvas. Deseja descartar?
               </p>
@@ -155,13 +177,13 @@ const DocumentDrawer: React.FC<DocumentDrawerProps> = ({
           )}
 
           {/* Número do documento */}
-          <div className="p-4 bg-gray-950 rounded-xl border border-gray-800">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-bold text-gray-500 uppercase">Número do Documento</p>
-              {!isNewDocument && !isUpdatingNumber && editedDoc.docNumber && (
+          <div className="p-5 bg-gray-950 rounded-xl border border-gray-800">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-black text-gray-500 uppercase">Número do Documento</p>
+              {!isNewDocument && !isUpdatingNumber && editedDoc.docNumber && !isEditing && (
                 <button
                   onClick={() => setIsUpdatingNumber(true)}
-                  className="text-xs text-indigo-400 hover:text-indigo-300 font-bold"
+                  className="text-xs text-indigo-400 hover:text-indigo-300 font-bold px-3 py-1 hover:bg-indigo-600/10 rounded-lg transition-all"
                 >
                   Atualizar número
                 </button>
@@ -184,12 +206,12 @@ const DocumentDrawer: React.FC<DocumentDrawerProps> = ({
                       }
                     }}
                     placeholder="Digite o número do documento"
-                    className="flex-1 px-4 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500"
+                    className="flex-1 px-4 py-3 bg-gray-900 border border-gray-700 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
                     autoFocus={isNewDocument}
                   />
                   <button
                     onClick={() => setShowNewNumber(!showNewNumber)}
-                    className="px-3 text-gray-500 hover:text-gray-300"
+                    className="px-4 text-gray-500 hover:text-gray-300 hover:bg-gray-800 rounded-xl transition-all"
                   >
                     {showNewNumber ? '👁️' : '🙈'}
                   </button>
@@ -197,28 +219,29 @@ const DocumentDrawer: React.FC<DocumentDrawerProps> = ({
                 {!isNewDocument && (
                   <>
                     <div className="flex gap-2">
-                      <Button variant="primary" onClick={handleUpdateNumber} disabled={!newNumber.trim()}>
+                      <Button variant="primary" onClick={handleUpdateNumber} disabled={!newNumber.trim()} className="flex-1">
                         Confirmar atualização
                       </Button>
                       <Button variant="ghost" onClick={() => { setIsUpdatingNumber(false); setNewNumber(''); }}>
                         Cancelar
                       </Button>
                     </div>
-                    <p className="text-xs text-amber-500">
-                      ⚠️ O número será criptografado e substituirá o atual
+                    <p className="text-xs text-amber-500 flex items-center gap-2">
+                      <span>⚠️</span>
+                      <span>O número será criptografado e substituirá o atual</span>
                     </p>
                   </>
                 )}
               </div>
             ) : (
-              <p className="text-2xl font-black tracking-widest text-white">
+              <p className="text-2xl font-black tracking-widest text-white font-mono">
                 {formatDocNumber(editedDoc.docNumber, editedDoc.docType) || '(não informado)'}
               </p>
             )}
           </div>
 
           {/* Metadados editáveis */}
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Passaporte */}
             {editedDoc.docType === 'Passaporte' && (
               <>
@@ -478,7 +501,7 @@ const DocumentDrawer: React.FC<DocumentDrawerProps> = ({
                   🗑️ Excluir documento
                 </button>
               ) : (
-                <div className="p-4 bg-red-600/10 rounded-xl border border-red-600/20 space-y-3">
+                <div className="p-4 bg-red-600/10 rounded-xl border border-red-600/20 space-y-3 animate-in slide-in-from-top-2">
                   <p className="text-sm text-red-400 font-bold">
                     ⚠️ Tem certeza que deseja excluir este documento?
                   </p>
@@ -497,7 +520,7 @@ const DocumentDrawer: React.FC<DocumentDrawerProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-gray-800 bg-gray-950 flex gap-3">
+        <div className="px-6 py-4 border-t border-gray-800 bg-gray-900/50 flex gap-3">
           {!isEditing ? (
             <>
               <Button variant="primary" className="flex-1" onClick={() => setIsEditing(true)}>

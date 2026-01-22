@@ -49,21 +49,17 @@ const formatDocNumber = (value: string, docType: string): string => {
 interface TravelerListProps {
   trip: Trip;
   onRefresh: () => void;
+  onNavigateToDetail: (travelerId: string) => void;
 }
 
-const TravelerList: React.FC<TravelerListProps> = ({ trip, onRefresh }) => {
+const TravelerList: React.FC<TravelerListProps> = ({ trip, onRefresh, onNavigateToDetail }) => {
   const [travelers, setTravelers] = useState<Traveler[]>([]);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
-  const [selectedTraveler, setSelectedTraveler] = useState<Traveler | null>(null);
   const [editingTraveler, setEditingTraveler] = useState<Partial<Traveler> | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [selectedDocument, setSelectedDocument] = useState<any>(null);
-  const [isAddingDocument, setIsAddingDocument] = useState(false);
-  const [showDocTypeSelector, setShowDocTypeSelector] = useState(false);
 
   useEffect(() => {
     loadTravelers();
@@ -71,16 +67,7 @@ const TravelerList: React.FC<TravelerListProps> = ({ trip, onRefresh }) => {
 
   const loadTravelers = async () => {
     const list = await dataProvider.getTravelers(trip.id);
-    
-    // Carregar documentos para cada viajante
-    const travelersWithDocs = await Promise.all(
-      list.map(async (t) => {
-        const docs = await dataProvider.getTravelerDocuments(t.id);
-        return { ...t, documents: docs };
-      })
-    );
-    
-    setTravelers(travelersWithDocs);
+    setTravelers(list);
   };
 
   const filteredTravelers = useMemo(() => {
@@ -112,118 +99,8 @@ const TravelerList: React.FC<TravelerListProps> = ({ trip, onRefresh }) => {
     setTimeout(() => setSuccessMessage(null), 3000);
   };
 
-  const handleDelete = async (id: string) => {
-    await dataProvider.deleteTraveler(id);
-    loadTravelers();
-    onRefresh();
-    setSelectedTraveler(null);
-    setDeleteConfirm(null);
-  };
-
-  const handleSaveDocument = async (doc: any) => {
-    try {
-      // Mapear campos do drawer para o formato esperado pela API
-      const mappedDoc = {
-        id: doc.id,
-        travelerId: doc.travelerId || selectedTraveler?.id,
-        docType: doc.docType,
-        docCategory: doc.docCategory,
-        docNumber: doc.docNumber || '',
-        issuerCountry: doc.issuerCountry || '',
-        issuerState: doc.issuerState || '',
-        issuerAgency: doc.issuerAgency || '',
-        issuerPlace: doc.issuerPlace || '',
-        regionOrCountry: doc.regionOrCountry || '',
-        issueDate: doc.issueDate || '',
-        docExpiry: doc.expiryDate || doc.docExpiry || '', // API espera docExpiry
-        visaCategory: doc.visaCategory || '',
-        entryType: doc.entryType || '',
-        stayDurationDays: doc.stayDurationDays || null,
-        licenseCategory: doc.licenseCategory || '',
-        customLabel: doc.customLabel || '',
-        passportDocumentId: doc.passportDocumentId || null,
-        isPrimary: doc.isPrimary || false,
-        notes: doc.notes || ''
-      };
-      
-      await dataProvider.saveTravelerDocument(mappedDoc);
-      await loadTravelers();
-      setSuccessMessage('Documento salvo com sucesso!');
-      setTimeout(() => setSuccessMessage(null), 3000);
-      setSelectedDocument(null);
-      setIsAddingDocument(false);
-    } catch (error: any) {
-      alert('Erro ao salvar documento: ' + error.message);
-    }
-  };
-
-  const handleDeleteDocument = async (docId: string) => {
-    try {
-      await dataProvider.deleteTravelerDocument(docId);
-      await loadTravelers();
-      setSuccessMessage('Documento excluído com sucesso!');
-      setTimeout(() => setSuccessMessage(null), 3000);
-    } catch (error: any) {
-      alert('Erro ao excluir documento: ' + error.message);
-    }
-  };
-
-  const handleUpdateDocumentNumber = async (docId: string, newNumber: string) => {
-    try {
-      // Buscar documento atual
-      const currentDoc = selectedTraveler?.documents?.find((d: any) => d.id === docId);
-      if (!currentDoc) return;
-
-      // Atualizar com novo número
-      await dataProvider.saveTravelerDocument({
-        ...currentDoc,
-        id: docId,
-        docNumber: newNumber
-      });
-
-      await loadTravelers();
-      setSuccessMessage('Número do documento atualizado com sucesso!');
-      setTimeout(() => setSuccessMessage(null), 3000);
-    } catch (error: any) {
-      alert('Erro ao atualizar número: ' + error.message);
-    }
-  };
-
-  const handleAddNewDocument = () => {
-    setShowDocTypeSelector(true);
-  };
-
-  const handleSelectDocType = (docType: string) => {
-    setShowDocTypeSelector(false);
-    setIsAddingDocument(true);
-    
-    const baseDoc = {
-      travelerId: selectedTraveler?.id,
-      docType,
-      docCategory: (docType === 'Visto' || docType === 'ESTA') ? 'entry' : 'identity',
-      docNumber: '',
-      notes: '',
-      issuerCountry: '',
-      issuerState: '',
-      issuerAgency: '',
-      issuerPlace: '',
-      regionOrCountry: '',
-      issueDate: '',
-      expiryDate: '', // DocumentDrawer usa expiryDate
-      visaCategory: '',
-      entryType: '',
-      stayDurationDays: null,
-      licenseCategory: '',
-      customLabel: '',
-      passportDocumentId: null,
-      isPrimary: false
-    };
-
-    setSelectedDocument(baseDoc);
-  };
-
   return (
-    <div className="flex flex-col lg:flex-row h-full gap-8 animate-in fade-in duration-500">
+    <div className="flex flex-col h-full gap-8 animate-in fade-in duration-500">
       {/* Mensagem de sucesso */}
       {successMessage && (
         <div className="fixed top-4 right-4 z-50 bg-emerald-600 text-white px-6 py-3 rounded-xl shadow-lg animate-in slide-in-from-top-2 duration-300">
@@ -231,7 +108,7 @@ const TravelerList: React.FC<TravelerListProps> = ({ trip, onRefresh }) => {
         </div>
       )}
       
-      {/* PAINEL ESQUERDA: LISTA */}
+      {/* LISTA DE VIAJANTES */}
       <div className="flex-1 space-y-6">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
@@ -276,7 +153,10 @@ const TravelerList: React.FC<TravelerListProps> = ({ trip, onRefresh }) => {
                 const displayName = t.fullName || 'Sem Nome';
 
                 return (
-                  <tr key={t.id} onClick={() => setSelectedTraveler(t)} className={`hover:bg-gray-900/40 transition-colors cursor-pointer ${selectedTraveler?.id === t.id ? 'bg-indigo-600/5' : ''}`}>
+                  <tr key={t.id} onClick={() => {
+                    console.log('🖱️ Clicou no viajante:', t.fullName, 'ID:', t.id);
+                    onNavigateToDetail(t.id);
+                  }} className="hover:bg-gray-900/40 transition-colors cursor-pointer">
                     <td className="p-4">
                        <div className="flex items-center gap-3">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${t.type === TravelerType.ADULT ? 'bg-indigo-600/20 text-indigo-400' : 'bg-yellow-600/20 text-yellow-400'}`}>
@@ -320,140 +200,6 @@ const TravelerList: React.FC<TravelerListProps> = ({ trip, onRefresh }) => {
         </div>
       </div>
 
-      {/* PAINEL DIREITA: DETALHES / DRAWER */}
-      <div className={`w-full lg:w-96 transition-all ${selectedTraveler ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-10 pointer-events-none absolute lg:relative'}`}>
-         {selectedTraveler && (
-           <Card className="sticky top-4 h-[calc(100vh-12rem)] flex flex-col !p-0">
-              <header className="p-6 border-b border-gray-800 bg-gray-950 flex justify-between items-start">
-                 <div>
-                    <h3 className="text-xl font-black text-white leading-tight">{selectedTraveler.fullName}</h3>
-                    <p className="text-xs text-indigo-400 font-bold uppercase">{selectedTraveler.type}</p>
-                 </div>
-                 <button onClick={() => setSelectedTraveler(null)} className="text-gray-500 hover:text-white transition-colors">
-                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                 </button>
-              </header>
-
-              <div className="flex-1 overflow-y-auto p-6 space-y-8">
-                 {/* Alertas / Issues */}
-                 {dataProvider.computeTravelerIssues(selectedTraveler, trip).length > 0 && (
-                   <section className="space-y-2">
-                      <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Pendências & Alertas</p>
-                      <div className="space-y-1">
-                         {dataProvider.computeTravelerIssues(selectedTraveler, trip).map((issue, idx) => (
-                           <div key={idx} className={`p-2 rounded-lg text-[10px] font-bold border ${issue.type === 'error' ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-amber-500/10 border-amber-500/30 text-amber-500'}`}>
-                              ⚠️ {issue.message}
-                           </div>
-                         ))}
-                      </div>
-                   </section>
-                 )}
-
-                 <section className="space-y-4">
-                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Informações de Contato</p>
-                    <div className="space-y-3">
-                       <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-gray-950 flex items-center justify-center border border-gray-800 text-indigo-400">📞</div>
-                          <div>
-                             <p className="text-xs text-gray-500 font-bold uppercase">Telefone</p>
-                             <p className="text-sm font-medium">{formatPhone(selectedTraveler.phone || '') || 'Não informado'}</p>
-                          </div>
-                       </div>
-                       <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-gray-950 flex items-center justify-center border border-gray-800 text-indigo-400">✉️</div>
-                          <div>
-                             <p className="text-xs text-gray-500 font-bold uppercase">Email</p>
-                             <p className="text-sm font-medium truncate w-48">{selectedTraveler.email || 'Não informado'}</p>
-                          </div>
-                       </div>
-                    </div>
-                 </section>
-
-                 <section className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Documentação</p>
-                      <button
-                        onClick={handleAddNewDocument}
-                        className="text-xs text-indigo-400 hover:text-indigo-300 font-bold"
-                      >
-                        + Adicionar
-                      </button>
-                    </div>
-                    {selectedTraveler.documents && selectedTraveler.documents.length > 0 ? (
-                      <div className="space-y-2">
-                        {selectedTraveler.documents.map((doc: any) => (
-                          <button
-                            key={doc.id}
-                            onClick={() => {
-                              setSelectedDocument(doc);
-                              setIsAddingDocument(false); // Não é novo, está editando
-                            }}
-                            className="w-full p-4 bg-gray-950 rounded-2xl border border-gray-800 hover:border-indigo-500/50 transition-all text-left"
-                          >
-                            <div className="flex justify-between items-start mb-2">
-                              <Badge color="indigo">{doc.docType}</Badge>
-                              {doc.expiryDate && (
-                                <span className="text-[10px] text-gray-500 font-bold">
-                                  Vence: {formatSupabaseDate(doc.expiryDate)}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-lg font-black tracking-widest text-white mb-1">{formatDocNumber(doc.docNumber, doc.docType)}</p>
-                            {doc.issuerCountry && (
-                              <p className="text-xs text-gray-500">🌍 {doc.issuerCountry}</p>
-                            )}
-                            {doc.notes && (
-                              <p className="text-xs text-gray-400 mt-2 italic line-clamp-2">{doc.notes}</p>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="p-4 bg-gray-950 rounded-2xl border border-gray-800 text-center">
-                        <p className="text-sm text-gray-600 italic mb-3">Nenhum documento cadastrado</p>
-                        <Button variant="outline" size="sm" onClick={handleAddNewDocument}>
-                          + Adicionar primeiro documento
-                        </Button>
-                      </div>
-                    )}
-                 </section>
-
-                 <section className="space-y-2">
-                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Participação</p>
-                    <div className="grid grid-cols-2 gap-2">
-                       <div className={`p-3 rounded-xl border flex flex-col items-center gap-1 ${selectedTraveler.isPayer ? 'bg-emerald-600/5 border-emerald-500/20 text-emerald-500' : 'bg-gray-950 border-gray-800 text-gray-500 opacity-50'}`}>
-                          <span className="text-xs font-bold">PAGANTE</span>
-                          <span className="text-[8px] font-black uppercase">{selectedTraveler.isPayer ? 'SIM' : 'NÃO'}</span>
-                       </div>
-                       <div className={`p-3 rounded-xl border flex flex-col items-center gap-1 ${selectedTraveler.canDrive ? 'bg-indigo-600/5 border-indigo-500/20 text-indigo-500' : 'bg-gray-950 border-gray-800 text-gray-500 opacity-50'}`}>
-                          <span className="text-xs font-bold">DIRIGE</span>
-                          <span className="text-[8px] font-black uppercase">{selectedTraveler.canDrive ? 'SIM' : 'NÃO'}</span>
-                       </div>
-                    </div>
-                 </section>
-              </div>
-
-              <footer className="p-6 border-t border-gray-800 bg-gray-950 flex gap-2">
-                 <Button variant="outline" className="flex-1" onClick={() => handleOpenWizard(selectedTraveler)}>Editar</Button>
-                 {deleteConfirm === selectedTraveler.id ? (
-                   <>
-                     <Button variant="ghost" className="px-3 bg-red-600/20 text-red-400 hover:bg-red-600/30" onClick={() => handleDelete(selectedTraveler.id)}>
-                       Confirmar
-                     </Button>
-                     <Button variant="ghost" className="px-3" onClick={() => setDeleteConfirm(null)}>
-                       Cancelar
-                     </Button>
-                   </>
-                 ) : (
-                   <Button variant="ghost" className="px-3" onClick={() => setDeleteConfirm(selectedTraveler.id)}>
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                   </Button>
-                 )}
-              </footer>
-           </Card>
-         )}
-      </div>
-
       {/* Modais */}
       <Modal isOpen={isWizardOpen} onClose={() => setIsWizardOpen(false)} title={editingTraveler?.id ? "Editar Viajante" : "Novo Viajante"}>
          <TravelerWizard 
@@ -483,90 +229,6 @@ const TravelerList: React.FC<TravelerListProps> = ({ trip, onRefresh }) => {
       <Modal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} title="Importar Viajantes em Lote">
          <TravelerImportModal onImport={handleImport} onClose={() => setIsImportOpen(false)} />
       </Modal>
-
-      {/* Modal de seleção de tipo de documento */}
-      <Modal isOpen={showDocTypeSelector} onClose={() => setShowDocTypeSelector(false)} title="Selecione o tipo de documento">
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={() => handleSelectDocType('Passaporte')}
-            className="p-4 bg-gray-950 hover:bg-gray-900 border border-gray-800 hover:border-indigo-500 rounded-xl transition-all text-left"
-          >
-            <div className="text-2xl mb-2">🛂</div>
-            <p className="font-bold text-white">Passaporte</p>
-            <p className="text-xs text-gray-500">Documento internacional</p>
-          </button>
-          
-          <button
-            onClick={() => handleSelectDocType('RG')}
-            className="p-4 bg-gray-950 hover:bg-gray-900 border border-gray-800 hover:border-indigo-500 rounded-xl transition-all text-left"
-          >
-            <div className="text-2xl mb-2">🪪</div>
-            <p className="font-bold text-white">RG</p>
-            <p className="text-xs text-gray-500">Registro Geral</p>
-          </button>
-          
-          <button
-            onClick={() => handleSelectDocType('CPF')}
-            className="p-4 bg-gray-950 hover:bg-gray-900 border border-gray-800 hover:border-indigo-500 rounded-xl transition-all text-left"
-          >
-            <div className="text-2xl mb-2">📄</div>
-            <p className="font-bold text-white">CPF</p>
-            <p className="text-xs text-gray-500">Cadastro de Pessoa Física</p>
-          </button>
-          
-          <button
-            onClick={() => handleSelectDocType('CNH')}
-            className="p-4 bg-gray-950 hover:bg-gray-900 border border-gray-800 hover:border-indigo-500 rounded-xl transition-all text-left"
-          >
-            <div className="text-2xl mb-2">🚗</div>
-            <p className="font-bold text-white">CNH</p>
-            <p className="text-xs text-gray-500">Carteira de Habilitação</p>
-          </button>
-          
-          <button
-            onClick={() => handleSelectDocType('Visto')}
-            className="p-4 bg-gray-950 hover:bg-gray-900 border border-gray-800 hover:border-indigo-500 rounded-xl transition-all text-left"
-          >
-            <div className="text-2xl mb-2">🌍</div>
-            <p className="font-bold text-white">Visto</p>
-            <p className="text-xs text-gray-500">Autorização de entrada</p>
-          </button>
-          
-          <button
-            onClick={() => handleSelectDocType('ESTA')}
-            className="p-4 bg-gray-950 hover:bg-gray-900 border border-gray-800 hover:border-indigo-500 rounded-xl transition-all text-left"
-          >
-            <div className="text-2xl mb-2">✈️</div>
-            <p className="font-bold text-white">ESTA/ETA</p>
-            <p className="text-xs text-gray-500">Autorização eletrônica</p>
-          </button>
-          
-          <button
-            onClick={() => handleSelectDocType('Outro')}
-            className="p-4 bg-gray-950 hover:bg-gray-900 border border-gray-800 hover:border-indigo-500 rounded-xl transition-all text-left col-span-2"
-          >
-            <div className="text-2xl mb-2">📋</div>
-            <p className="font-bold text-white">Outro</p>
-            <p className="text-xs text-gray-500">Documento customizado</p>
-          </button>
-        </div>
-      </Modal>
-
-      {/* Document Drawer */}
-      {selectedDocument && selectedTraveler && (
-        <DocumentDrawer
-          document={selectedDocument}
-          passports={selectedTraveler.documents?.filter((d: any) => d.docType === 'Passaporte') || []}
-          onClose={() => {
-            setSelectedDocument(null);
-            setIsAddingDocument(false);
-          }}
-          onSave={handleSaveDocument}
-          onDelete={handleDeleteDocument}
-          onUpdateNumber={handleUpdateDocumentNumber}
-          isNewDocument={isAddingDocument}
-        />
-      )}
     </div>
   );
 };

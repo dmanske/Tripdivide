@@ -12,6 +12,7 @@ import ExpenseDetailView from './components/ExpenseDetailView';
 import PaymentsPage from './components/PaymentsPage';
 import SettlementPage from './components/SettlementPage';
 import TravelerList from './components/TravelerList';
+import TravelerDetailPage from './components/TravelerDetailPage';
 import QuoteDetailView from './components/QuoteDetailView';
 import VendorDetailView from './components/VendorDetailView';
 import QuoteWizard from './components/QuoteWizard';
@@ -19,13 +20,18 @@ import VendorForm from './components/VendorForm';
 import ComparisonPage from './components/ComparisonPage';
 import LandingHero from './components/LandingHero';
 import HowItWorks from './components/HowItWorks';
+import TripList from './components/TripList';
+import TripWizard from './components/TripWizard';
 import { Trip, Quote, Expense, Vendor } from './types';
 import { dataProvider } from './lib/dataProvider';
+import { supabaseDataProvider } from './lib/supabaseDataProvider';
 import { Button } from './components/CommonUI';
 
 type ViewState =
   | { type: 'dashboard' }
+  | { type: 'trips' }
   | { type: 'travelers' }
+  | { type: 'traveler-detail'; id: string }
   | { type: 'vendors' }
   | { type: 'vendor-detail'; id: string }
   | { type: 'vendor-edit'; id?: string }
@@ -43,7 +49,9 @@ const App: React.FC = () => {
   const [authLoading, setAuthLoading] = useState(true);
   const [view, setView] = useState<ViewState>({ type: 'dashboard' });
   const [trip, setTrip] = useState<Trip | null>(null);
+  const [activeTripId, setActiveTripId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showTripWizard, setShowTripWizard] = useState(false);
 
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
@@ -65,66 +73,89 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const loadData = async () => {
+  const loadData = async (tripId?: string) => {
     if (!user) return;
     
-    const tripsList = await dataProvider.getTrips();
-    if (tripsList.length > 0) {
-      const currentTrip = tripsList[0];
-      
-      // Load related data
-      const [couples, segments, vs, qs, es] = await Promise.all([
-        dataProvider.getCouples(currentTrip.id),
-        dataProvider.getSegments(currentTrip.id),
-        dataProvider.getVendors(currentTrip.id),
-        dataProvider.getQuotes(currentTrip.id),
-        dataProvider.getExpenses(currentTrip.id)
-      ]);
+    setLoading(true);
+    try {
+      // Buscar viagem ativa ou usar tripId fornecido
+      let currentTripId = tripId;
+      if (!currentTripId) {
+        currentTripId = await supabaseDataProvider.getActiveTrip();
+      }
 
-      // Load travelers for each couple
-      const travelers = await dataProvider.getTravelers(currentTrip.id);
-      
-      // Build couples with members
-      const couplesWithMembers = couples.map(c => ({
-        id: c.id,
-        name: c.name,
-        members: travelers
-          .filter(t => t.couple_id === c.id)
-          .map(t => ({
-            id: t.id,
-            name: t.full_name,
-            isChild: t.type !== 'Adulto'
-          }))
-      }));
+      if (!currentTripId) {
+        // Buscar primeira viagem disponível
+        const tripsList = await supabaseDataProvider.getTrips();
+        const activeTrips = tripsList.filter((t: any) => t.status === 'active');
+        if (activeTrips.length > 0) {
+          currentTripId = activeTrips[0].id;
+          await supabaseDataProvider.setActiveTrip(currentTripId);
+        }
+      }
 
-      // Build segments
-      const segmentsFormatted = segments.map(s => ({
-        id: s.id,
-        name: s.name,
-        startDate: s.start_date,
-        endDate: s.end_date
-      }));
+      if (currentTripId) {
+        setActiveTripId(currentTripId);
+        const currentTrip = await supabaseDataProvider.getTripById(currentTripId);
+        
+        // Load related data
+        const [couples, segments, vs, qs, es] = await Promise.all([
+          dataProvider.getCouples(currentTripId),
+          dataProvider.getSegments(currentTripId),
+          dataProvider.getVendors(currentTripId),
+          dataProvider.getQuotes(currentTripId),
+          dataProvider.getExpenses(currentTripId)
+        ]);
 
-      // Build complete trip object
-      const completeTrip: Trip = {
-        id: currentTrip.id,
-        name: currentTrip.name,
-        startDate: currentTrip.start_date,
-        endDate: currentTrip.end_date,
-        consensusRule: currentTrip.consensus_rule,
-        categories: currentTrip.categories,
-        couples: couplesWithMembers,
-        segments: segmentsFormatted.length > 0 ? segmentsFormatted : [{ id: 'seg-all', name: 'Geral', startDate: '', endDate: '' }]
-      };
+        // Load travelers for each couple
+        const travelers = await dataProvider.getTravelers(currentTripId);
+        
+        // Build couples with members
+        const couplesWithMembers = couples.map(c => ({
+          id: c.id,
+          name: c.name,
+          members: travelers
+            .filter(t => t.couple_id === c.id)
+            .map(t => ({
+              id: t.id,
+              name: t.full_name,
+              isChild: t.type !== 'Adulto'
+            }))
+        }));
 
-      setTrip(completeTrip);
-      setVendors(vs);
-      setQuotes(qs);
-      setExpenses(es);
-    } else {
-      setTrip(null);
+        // Build segments
+        const segmentsFormatted = segments.map(s => ({
+          id: s.id,
+          name: s.name,
+          startDate: s.start_date,
+          endDate: s.end_date
+        }));
+
+        // Build complete trip object
+        const completeTrip: Trip = {
+          id: currentTrip.id,
+          name: currentTrip.name,
+          startDate: currentTrip.start_date,
+          endDate: currentTrip.end_date,
+          consensusRule: currentTrip.consensus_rule,
+          categories: currentTrip.categories,
+          couples: couplesWithMembers,
+          segments: segmentsFormatted.length > 0 ? segmentsFormatted : [{ id: 'seg-all', name: 'Geral', startDate: '', endDate: '' }]
+        };
+
+        setTrip(completeTrip);
+        setVendors(vs);
+        setQuotes(qs);
+        setExpenses(es);
+      } else {
+        setTrip(null);
+        setActiveTripId(null);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -159,27 +190,16 @@ const App: React.FC = () => {
   }
 
   const handleCreateInitialTrip = async () => {
-    const newTrip = await dataProvider.saveTrip({
-      name: 'Minha Nova Viagem',
-      startDate: new Date().toISOString().split('T')[0],
-      endDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
-      consensusRule: '2/3',
-      categories: ['Voo', 'Hospedagem', 'Aluguel de Carro', 'Restaurantes', 'Diversos']
-    });
+    setShowTripWizard(true);
+  };
 
-    // Create default couple
-    await dataProvider.saveCouple(newTrip.id, { name: 'Grupo Principal' });
-    
-    // Create default segment
-    await dataProvider.saveSegment({
-      tripId: newTrip.id,
-      name: 'Geral',
-      startDate: '',
-      endDate: ''
-    });
+  const handleTripChange = async (tripId: string) => {
+    await loadData(tripId);
+    setView({ type: 'dashboard' });
+  };
 
-    await loadData();
-    setShowLanding(false);
+  const handleCreateTrip = () => {
+    setShowTripWizard(true);
   };
 
   if (showLanding) {
@@ -209,7 +229,9 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (view.type) {
       case 'dashboard': return <Dashboard trip={trip} quotes={quotes} expenses={expenses} onNavigate={navigateTo} onRefresh={loadData} />;
-      case 'travelers': return <TravelerList trip={trip} onRefresh={loadData} />;
+      case 'trips': return <TripList onNavigateToTrip={handleTripChange} onRefresh={loadData} />;
+      case 'travelers': return <TravelerList trip={trip} onRefresh={loadData} onNavigateToDetail={(id) => setView({ type: 'traveler-detail', id })} />;
+      case 'traveler-detail': return <TravelerDetailPage trip={trip} travelerId={view.id} onBack={() => setView({ type: 'travelers' })} onRefresh={loadData} />;
 
       case 'vendors': return <VendorList trip={trip} onRefresh={loadData} onNavigateToVendor={(id) => setView({ type: 'vendor-detail', id })} onNavigateToWizard={() => setView({ type: 'vendor-edit' })} />;
       case 'vendor-detail': {
@@ -265,8 +287,42 @@ const App: React.FC = () => {
   };
 
   return (
-    <Layout activeTab={view.type.split('-')[0]} setActiveTab={navigateTo} tripName={trip.name} userEmail={user?.email}>
+    <Layout 
+      activeTab={view.type.split('-')[0]} 
+      setActiveTab={navigateTo} 
+      tripId={activeTripId}
+      tripName={trip?.name || 'Sem viagem'} 
+      userEmail={user?.email}
+      onTripChange={handleTripChange}
+      onCreateTrip={handleCreateTrip}
+    >
       {renderContent()}
+      
+      {/* Trip Wizard */}
+      {showTripWizard && (
+        <TripWizard
+          onClose={() => setShowTripWizard(false)}
+          onSave={async (tripData) => {
+            const newTrip = await supabaseDataProvider.saveTrip(tripData);
+            
+            // Create default couple
+            await dataProvider.saveCouple(newTrip.id, { name: 'Grupo Principal' });
+            
+            // Create default segment
+            await dataProvider.saveSegment({
+              tripId: newTrip.id,
+              name: 'Geral',
+              startDate: '',
+              endDate: ''
+            });
+
+            setShowTripWizard(false);
+            setShowLanding(false);
+            await loadData(newTrip.id);
+            setView({ type: 'dashboard' });
+          }}
+        />
+      )}
     </Layout>
   );
 };

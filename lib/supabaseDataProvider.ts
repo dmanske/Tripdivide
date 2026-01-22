@@ -10,10 +10,41 @@ export const supabaseDataProvider = {
     const { data, error } = await supabase
       .from('td_trips')
       .select('*')
-      .eq('user_id', user.id);
+      .eq('user_id', user.id)
+      .order('updated_at', { ascending: false });
 
     if (error) throw error;
     return data || [];
+  },
+
+  getActiveTrip: async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data, error } = await supabase
+      .from('td_user_active_trip')
+      .select('active_trip_id')
+      .eq('user_id', user.id)
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error;
+    return data?.active_trip_id || null;
+  },
+
+  setActiveTrip: async (tripId: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Usuário não autenticado');
+
+    const { error } = await supabase
+      .from('td_user_active_trip')
+      .upsert({
+        user_id: user.id,
+        active_trip_id: tripId,
+        updated_at: new Date().toISOString()
+      });
+
+    if (error) throw error;
+    return true;
   },
 
   getTripById: async (tripId: string) => {
@@ -27,7 +58,7 @@ export const supabaseDataProvider = {
     return data;
   },
 
-  saveTrip: async (trip: Partial<Trip>) => {
+  saveTrip: async (trip: Partial<Trip> & { status?: string; destinations?: string[]; baseCurrency?: string; defaultExchangeRate?: number; defaultSplitRule?: string }) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Usuário não autenticado');
 
@@ -41,6 +72,11 @@ export const supabaseDataProvider = {
           end_date: trip.endDate,
           consensus_rule: trip.consensusRule,
           categories: trip.categories,
+          status: trip.status,
+          destinations: trip.destinations,
+          base_currency: trip.baseCurrency,
+          default_exchange_rate: trip.defaultExchangeRate,
+          default_split_rule: trip.defaultSplitRule,
           updated_at: new Date().toISOString()
         })
         .eq('id', trip.id)
@@ -59,14 +95,133 @@ export const supabaseDataProvider = {
           start_date: trip.startDate,
           end_date: trip.endDate,
           consensus_rule: trip.consensusRule || '2/3',
-          categories: trip.categories || ['Voo', 'Hospedagem', 'Aluguel de Carro', 'Restaurantes', 'Diversos']
+          categories: trip.categories || ['Voo', 'Hospedagem', 'Aluguel de Carro', 'Restaurantes', 'Diversos'],
+          status: trip.status || 'active',
+          destinations: trip.destinations || [],
+          base_currency: trip.baseCurrency || 'BRL',
+          default_exchange_rate: trip.defaultExchangeRate || 1.0,
+          default_split_rule: trip.defaultSplitRule || 'equal'
         })
         .select()
         .single();
 
       if (error) throw error;
+
+      // Definir como viagem ativa automaticamente
+      await supabaseDataProvider.setActiveTrip(data.id);
+
       return data;
     }
+  },
+
+  duplicateTrip: async (tripId: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Usuário não autenticado');
+
+    // Buscar viagem original
+    const { data: originalTrip } = await supabase
+      .from('td_trips')
+      .select('*')
+      .eq('id', tripId)
+      .single();
+
+    if (!originalTrip) throw new Error('Viagem não encontrada');
+
+    // Criar cópia
+    const { data: newTrip, error } = await supabase
+      .from('td_trips')
+      .insert({
+        user_id: user.id,
+        name: `${originalTrip.name} (Cópia)`,
+        start_date: originalTrip.start_date,
+        end_date: originalTrip.end_date,
+        consensus_rule: originalTrip.consensus_rule,
+        categories: originalTrip.categories,
+        status: 'draft',
+        destinations: originalTrip.destinations,
+        base_currency: originalTrip.base_currency,
+        default_exchange_rate: originalTrip.default_exchange_rate,
+        default_split_rule: originalTrip.default_split_rule
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Copiar couples
+    const { data: couples } = await supabase
+      .from('td_couples')
+      .select('*')
+      .eq('trip_id', tripId);
+
+    if (couples && couples.length > 0) {
+      await supabase
+        .from('td_couples')
+        .insert(couples.map(c => ({
+          trip_id: newTrip.id,
+          name: c.name
+        })));
+    }
+
+    // Copiar segments
+    const { data: segments } = await supabase
+      .from('td_segments')
+      .select('*')
+      .eq('trip_id', tripId);
+
+    if (segments && segments.length > 0) {
+      await supabase
+        .from('td_segments')
+        .insert(segments.map(s => ({
+          trip_id: newTrip.id,
+          name: s.name,
+          start_date: s.start_date,
+          end_date: s.end_date
+        })));
+    }
+
+    return newTrip;
+  },
+
+  archiveTrip: async (tripId: string) => {
+    const { error } = await supabase
+      .from('td_trips')
+      .update({ status: 'archived', updated_at: new Date().toISOString() })
+      .eq('id', tripId);
+
+    if (error) throw error;
+    return true;
+  },
+
+  deleteTrip: async (tripId: string) => {
+    const { error } = await supabase
+      .from('td_trips')
+      .delete()
+      .eq('id', tripId);
+
+    if (error) throw error;
+    return true;
+  },
+
+  finalizeTripDraft: async (tripId: string, data: { name: string; startDate: string; endDate: string; destinations: string[] }) => {
+    const { error } = await supabase
+      .from('td_trips')
+      .update({
+        name: data.name,
+        start_date: data.startDate,
+        end_date: data.endDate,
+        destinations: data.destinations,
+        status: 'active',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', tripId);
+
+    if (error) throw error;
+
+    // Definir como viagem ativa
+    await supabaseDataProvider.setActiveTrip(tripId);
+
+    return true;
   },
 
   // ==================== COUPLES ====================

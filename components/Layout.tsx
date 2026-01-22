@@ -2,18 +2,23 @@
 import React from 'react';
 import { supabase } from '../lib/supabase';
 import { ICONS } from '../constants.tsx';
+import TripSwitcher from './TripSwitcher';
 
 interface LayoutProps {
   children: React.ReactNode;
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  tripId: string | null;
   tripName: string;
   userEmail?: string;
+  onTripChange: (tripId: string) => void;
+  onCreateTrip: () => void;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, tripName, userEmail }) => {
+const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, tripId, tripName, userEmail, onTripChange, onCreateTrip }) => {
   const menuItems = [
     { id: 'dashboard', label: 'Painel Geral', icon: ICONS.Dashboard },
+    { id: 'trips', label: 'Viagens', icon: ICONS.Dashboard },
     { id: 'travelers', label: 'Viajantes', icon: ICONS.Travelers },
     { id: 'vendors', label: 'Fornecedores', icon: ICONS.Vendors },
     { id: 'quotes', label: 'Orçamentos', icon: ICONS.Quotes },
@@ -36,7 +41,18 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, trip
             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center font-bold italic text-white shadow-lg shadow-indigo-600/30">TD</div>
             <h1 className="text-xl font-black tracking-tight text-white uppercase">TripDivide</h1>
           </div>
-          <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest truncate">{tripName}</p>
+          
+          {/* Trip Switcher */}
+          {tripId && (
+            <div className="mt-2">
+              <TripSwitcher
+                currentTripId={tripId}
+                currentTripName={tripName}
+                onTripChange={onTripChange}
+                onCreateNew={onCreateTrip}
+              />
+            </div>
+          )}
         </div>
         
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
