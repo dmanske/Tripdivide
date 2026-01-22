@@ -1,0 +1,224 @@
+
+import React, { useState } from 'react';
+import { Trip, Quote, QuoteStatus } from '../types';
+import { Card, Button, Badge } from './CommonUI';
+import { dataProvider } from '../lib/dataProvider';
+
+interface ComparisonToolProps {
+  trip: Trip;
+  quotes: Quote[];
+  onRefresh: () => void;
+}
+
+const ComparisonTool: React.FC<ComparisonToolProps> = ({ trip, quotes, onRefresh }) => {
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  
+  const selectedQuotes = quotes.filter(q => selectedIds.includes(q.id));
+  const availableQuotes = quotes.filter(q => q.status !== QuoteStatus.REJECTED && q.status !== QuoteStatus.CHOSEN);
+
+  const toggleSelection = (id: string) => {
+    if (selectedIds.includes(id)) {
+      setSelectedIds(prev => prev.filter(i => i !== id));
+    } else {
+      if (selectedIds.length >= 4) return alert('Máximo de 4 itens para comparar.');
+      setSelectedIds(prev => [...prev, id]);
+    }
+  };
+
+  const handleVote = async (quoteId: string, coupleId: string, decision: 'APPROVE' | 'REJECT') => {
+    const q = quotes.find(item => item.id === quoteId);
+    if (!q) return;
+
+    const existingVotes = [...q.votes];
+    const voteIdx = existingVotes.findIndex(v => v.coupleId === coupleId);
+    
+    // Se clicar no mesmo que já está selecionado, retira o voto (opcional, aqui estamos trocando)
+    if (voteIdx >= 0 && existingVotes[voteIdx].decision === decision) {
+       // Opcional: remover voto se clicar de novo. Por simplicidade, mantemos a troca.
+    }
+    
+    if (voteIdx >= 0) existingVotes[voteIdx].decision = decision;
+    else existingVotes.push({ coupleId, decision });
+
+    await dataProvider.saveQuote({ ...q, votes: existingVotes });
+    onRefresh();
+  };
+
+  const handleConsensusRuleChange = async (rule: '2/3' | '3/3') => {
+    await dataProvider.saveTrip({ ...trip, consensusRule: rule });
+    onRefresh();
+  };
+
+  const handleFinalize = async (quote: Quote) => {
+    if (confirm(`🏆 CONSENSO ATINGIDO! Deseja fechar este orçamento com ${quote.provider}?\n\nIsso criará automaticamente uma despesa na lista oficial.`)) {
+      await dataProvider.saveQuote({ ...quote, status: QuoteStatus.CHOSEN });
+      
+      const expense = {
+        id: '',
+        tripId: trip.id,
+        segmentId: quote.segmentId,
+        quoteId: quote.id,
+        title: `${quote.category}: ${quote.provider}`,
+        category: quote.category,
+        currency: quote.currency,
+        // Fix: Changed quote.value to quote.totalAmount
+        value: quote.totalAmount,
+        exchangeRate: quote.exchangeRate,
+        amountBrl: quote.amountBrl,
+        dueDate: quote.validUntil,
+        status: 'PLANNED' as any,
+        splits: trip.couples.map(c => ({
+          coupleId: c.id,
+          amount: quote.amountBrl / 3,
+          percentage: 33.33
+        }))
+      };
+      await dataProvider.saveExpense(expense as any);
+      onRefresh();
+      alert('Orçamento fechado e despesa criada!');
+    }
+  };
+
+  const requiredVotes = trip.consensusRule === '2/3' ? 2 : 3;
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-bold text-white">Votação & Decisão</h2>
+          <p className="text-gray-400">Vote para decidir os melhores orçamentos com base na regra de consenso</p>
+        </div>
+        
+        <div className="bg-gray-900 border border-gray-800 p-1 rounded-xl flex items-center gap-2">
+          <span className="text-[10px] text-gray-500 font-black uppercase px-2">Regra:</span>
+          <button 
+            onClick={() => handleConsensusRuleChange('2/3')}
+            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${trip.consensusRule === '2/3' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+          >
+            2/3 (Maioria)
+          </button>
+          <button 
+            onClick={() => handleConsensusRuleChange('3/3')}
+            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${trip.consensusRule === '3/3' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+          >
+            3/3 (Unanimidade)
+          </button>
+        </div>
+      </header>
+
+      {/* Área de Seleção */}
+      <section className="bg-gray-900/50 p-6 rounded-2xl border border-gray-800">
+        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-4">Selecione para Comparar e Votar</h3>
+        <div className="flex flex-wrap gap-2">
+           {availableQuotes.map(q => (
+             <button 
+                key={q.id}
+                onClick={() => toggleSelection(q.id)}
+                className={`px-4 py-2 rounded-xl text-sm font-bold transition-all border ${
+                  selectedIds.includes(q.id) 
+                  ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-500/20' 
+                  : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-600'
+                }`}
+             >
+               {q.provider} (R$ {q.amountBrl.toLocaleString('pt-BR')})
+             </button>
+           ))}
+           {availableQuotes.length === 0 && <p className="text-gray-600 italic text-sm">Nenhum orçamento disponível para votação.</p>}
+        </div>
+      </section>
+
+      {/* Grid de Comparação e Votação */}
+      {selectedQuotes.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
+           {selectedQuotes.map(q => {
+             const approvals = q.votes.filter(v => v.decision === 'APPROVE').length;
+             const rejections = q.votes.filter(v => v.decision === 'REJECT').length;
+             const hasConsensus = approvals >= requiredVotes;
+
+             return (
+               <Card key={q.id} className={`p-0 border-gray-800 flex flex-col h-full hover:border-indigo-500/50 transition-colors ${hasConsensus ? 'ring-2 ring-indigo-600 ring-offset-2 ring-offset-gray-950' : ''}`}>
+                  <div className="p-4 border-b border-gray-800 bg-gray-950 flex justify-between items-center">
+                    <div>
+                      <h4 className="font-black text-gray-100 uppercase tracking-tight truncate max-w-[120px]">{q.provider}</h4>
+                      <p className="text-[10px] text-indigo-400 font-bold">{q.category}</p>
+                    </div>
+                    {hasConsensus && <Badge color="green">Eleito!</Badge>}
+                  </div>
+                  
+                  <div className="p-4 space-y-4 flex-1">
+                    <div className="space-y-1">
+                       <p className="text-[10px] text-gray-500 font-bold">VALOR TOTAL BRL</p>
+                       <p className="text-xl font-black text-indigo-400">R$ {q.amountBrl.toLocaleString('pt-BR')}</p>
+                       <p className="text-xs text-gray-600">Por casal: R$ {(q.amountBrl / 3).toLocaleString('pt-BR')}</p>
+                    </div>
+
+                    <div className="space-y-1">
+                       <div className="flex justify-between items-center">
+                          <p className="text-[10px] text-gray-500 font-bold uppercase">Consenso ({approvals}/{requiredVotes})</p>
+                          <span className="text-[10px] text-red-400 font-bold">Vetos: {rejections}</span>
+                       </div>
+                       <div className="flex gap-1 h-2 rounded-full overflow-hidden bg-gray-950 border border-gray-800">
+                          {[1, 2, 3].map(i => (
+                            <div key={i} className={`flex-1 transition-colors ${approvals >= i ? 'bg-indigo-500' : 'bg-transparent'} ${i > requiredVotes ? 'opacity-20' : ''}`} />
+                          ))}
+                       </div>
+                    </div>
+
+                    <div className="space-y-2 pt-4 border-t border-gray-800">
+                       <p className="text-[10px] text-gray-500 font-bold uppercase mb-3">Votação dos Casais</p>
+                       {trip.couples.map(c => {
+                         const vote = q.votes.find(v => v.coupleId === c.id);
+                         return (
+                           <div key={c.id} className="flex flex-col gap-1 bg-gray-950 p-2 rounded-lg border border-gray-800">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-gray-300">{c.name}</span>
+                                <div className="flex gap-1">
+                                  <button 
+                                    onClick={() => handleVote(q.id, c.id, 'APPROVE')}
+                                    className={`px-2 py-1 rounded text-[10px] font-black transition-all border ${vote?.decision === 'APPROVE' ? 'bg-green-600 border-green-400 text-white' : 'bg-gray-900 border-gray-800 text-gray-600 hover:text-green-500'}`}
+                                  >
+                                    APROVAR
+                                  </button>
+                                  <button 
+                                    onClick={() => handleVote(q.id, c.id, 'REJECT')}
+                                    className={`px-2 py-1 rounded text-[10px] font-black transition-all border ${vote?.decision === 'REJECT' ? 'bg-red-600 border-red-400 text-white' : 'bg-gray-900 border-gray-800 text-gray-600 hover:text-red-500'}`}
+                                  >
+                                    REJEITAR
+                                  </button>
+                                </div>
+                              </div>
+                           </div>
+                         );
+                       })}
+                    </div>
+                  </div>
+                  
+                  <div className="p-4 bg-gray-800/30 border-t border-gray-800 space-y-4">
+                     {hasConsensus ? (
+                       <Button 
+                         variant="primary" 
+                         className="w-full text-xs py-2 shadow-indigo-600/40"
+                         onClick={() => handleFinalize(q)}
+                       >
+                         Fechar Orçamento 🏆
+                       </Button>
+                     ) : (
+                       <p className="text-[10px] text-gray-500 italic text-center">Aguardando consenso para fechar...</p>
+                     )}
+                  </div>
+               </Card>
+             );
+           })}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-20 bg-gray-900 border border-dashed border-gray-800 rounded-2xl text-gray-500">
+           <svg className="w-16 h-16 opacity-20 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+           <p className="font-bold">Nenhum orçamento selecionado para votação</p>
+           <p className="text-sm">Clique nos orçamentos acima para trazê-los para a mesa de votação</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ComparisonTool;

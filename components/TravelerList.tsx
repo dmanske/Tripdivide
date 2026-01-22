@@ -1,0 +1,270 @@
+
+import React, { useState, useMemo, useEffect } from 'react';
+import { Trip, Traveler, TravelerType, Couple, TravelerIssue } from '../types';
+import { Card, Badge, Button, Input, Modal } from './CommonUI';
+import { dataProvider } from '../lib/dataProvider';
+import TravelerWizard from './TravelerWizard';
+import TravelerImportModal from './TravelerImportModal';
+
+interface TravelerListProps {
+  trip: Trip;
+  onRefresh: () => void;
+}
+
+const TravelerList: React.FC<TravelerListProps> = ({ trip, onRefresh }) => {
+  const [travelers, setTravelers] = useState<Traveler[]>([]);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [selectedTraveler, setSelectedTraveler] = useState<Traveler | null>(null);
+  const [editingTraveler, setEditingTraveler] = useState<Partial<Traveler> | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState('all');
+
+  useEffect(() => {
+    loadTravelers();
+  }, [trip.id]);
+
+  const loadTravelers = async () => {
+    const list = await dataProvider.getTravelers(trip.id);
+    setTravelers(list);
+  };
+
+  const filteredTravelers = useMemo(() => {
+    const searchLower = searchTerm.toLowerCase();
+    return travelers.filter(t => {
+      const fullName = t.fullName || '';
+      const nickname = t.nickname || '';
+      const phone = t.phone || '';
+      
+      const matchesSearch = fullName.toLowerCase().includes(searchLower) || 
+                            phone.includes(searchTerm) || 
+                            nickname.toLowerCase().includes(searchLower);
+      const matchesType = filterType === 'all' || t.type === filterType;
+      return matchesSearch && matchesType;
+    });
+  }, [travelers, searchTerm, filterType]);
+
+  const handleOpenWizard = (t: Partial<Traveler> | null = null) => {
+    setEditingTraveler(t);
+    setIsWizardOpen(true);
+  };
+
+  const handleImport = async (raw: string) => {
+    const count = await dataProvider.bulkImportTravelers(trip.id, raw);
+    setIsImportOpen(false);
+    loadTravelers();
+    onRefresh();
+    alert(`${count} viajantes importados com sucesso!`);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (confirm('Deseja arquivar este viajante?')) {
+      await dataProvider.deleteTraveler(id);
+      loadTravelers();
+      onRefresh();
+      setSelectedTraveler(null);
+    }
+  };
+
+  return (
+    <div className="flex flex-col lg:flex-row h-full gap-8 animate-in fade-in duration-500">
+      {/* PAINEL ESQUERDA: LISTA */}
+      <div className="flex-1 space-y-6">
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-3xl font-black text-white uppercase tracking-tighter">Viajantes</h2>
+            <p className="text-gray-500">Gestão de participantes e documentos</p>
+          </div>
+          <div className="flex gap-2">
+             <Button variant="outline" onClick={() => setIsImportOpen(true)}>Importar</Button>
+             <Button variant="primary" onClick={() => handleOpenWizard()}>+ Novo Viajante</Button>
+          </div>
+        </header>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-gray-900/40 p-4 rounded-2xl border border-gray-800">
+           <div className="md:col-span-2">
+              <Input placeholder="Buscar por nome, fone, email..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+           </div>
+           <Input as="select" value={filterType} onChange={e => setFilterType(e.target.value)}>
+              <option value="all">Todos os tipos</option>
+              {Object.values(TravelerType).map(t => <option key={t} value={t}>{t}</option>)}
+           </Input>
+           <div className="flex items-center gap-2 justify-center">
+              <Badge color="indigo">{travelers.length} Total</Badge>
+              <Badge color="gray">{travelers.filter(t => t.type === TravelerType.ADULT).length} ADU</Badge>
+           </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead className="text-[10px] font-black uppercase text-gray-500 border-b border-gray-800">
+              <tr>
+                <th className="p-4">Nome / Tipo</th>
+                <th className="p-4">Casal / Grupo</th>
+                <th className="p-4">Segmentos</th>
+                <th className="p-4">Status</th>
+                <th className="p-4 text-center">Issues</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-800">
+              {filteredTravelers.map(t => {
+                const issues = dataProvider.computeTravelerIssues(t, trip);
+                const hasErrors = issues.some(i => i.type === 'error');
+                const hasWarnings = issues.some(i => i.type === 'warning');
+                const displayName = t.fullName || 'Sem Nome';
+
+                return (
+                  <tr key={t.id} onClick={() => setSelectedTraveler(t)} className={`hover:bg-gray-900/40 transition-colors cursor-pointer ${selectedTraveler?.id === t.id ? 'bg-indigo-600/5' : ''}`}>
+                    <td className="p-4">
+                       <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${t.type === TravelerType.ADULT ? 'bg-indigo-600/20 text-indigo-400' : 'bg-yellow-600/20 text-yellow-400'}`}>
+                             {displayName.charAt(0)}
+                          </div>
+                          <div>
+                             <p className="font-bold text-gray-200">{displayName}</p>
+                             <p className="text-[10px] text-gray-500 uppercase">{t.type} {t.nickname ? `• ${t.nickname}` : ''}</p>
+                          </div>
+                       </div>
+                    </td>
+                    <td className="p-4">
+                       <span className="text-sm text-gray-400 font-medium">{trip.couples.find(c => c.id === t.coupleId)?.name}</span>
+                    </td>
+                    <td className="p-4">
+                       <div className="flex flex-wrap gap-1">
+                          {(t.goesToSegments || []).map(sid => {
+                            const seg = trip.segments.find(s => s.id === sid);
+                            return <span key={sid} className="text-[9px] px-1.5 py-0.5 bg-gray-800 text-gray-500 rounded uppercase font-bold">{seg?.name}</span>
+                          })}
+                       </div>
+                    </td>
+                    <td className="p-4">
+                       <Badge color={t.isPayer ? 'green' : 'gray'}>{t.isPayer ? 'Pagante' : 'Não pagante'}</Badge>
+                    </td>
+                    <td className="p-4 text-center">
+                       <div className="flex justify-center gap-1">
+                          {hasErrors && <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" title="Erro crítico" />}
+                          {hasWarnings && <div className="w-2 h-2 rounded-full bg-amber-500" title="Atenção" />}
+                          {!hasErrors && !hasWarnings && <span className="text-emerald-500 text-xs">✅</span>}
+                       </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {filteredTravelers.length === 0 && (
+             <div className="py-20 text-center text-gray-600 italic">Nenhum viajante encontrado.</div>
+          )}
+        </div>
+      </div>
+
+      {/* PAINEL DIREITA: DETALHES / DRAWER */}
+      <div className={`w-full lg:w-96 transition-all ${selectedTraveler ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-10 pointer-events-none absolute lg:relative'}`}>
+         {selectedTraveler && (
+           <Card className="sticky top-4 h-[calc(100vh-12rem)] flex flex-col !p-0">
+              <header className="p-6 border-b border-gray-800 bg-gray-950 flex justify-between items-start">
+                 <div>
+                    <h3 className="text-xl font-black text-white leading-tight">{selectedTraveler.fullName}</h3>
+                    <p className="text-xs text-indigo-400 font-bold uppercase">{selectedTraveler.type}</p>
+                 </div>
+                 <button onClick={() => setSelectedTraveler(null)} className="text-gray-500 hover:text-white transition-colors">
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                 </button>
+              </header>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                 {/* Alertas / Issues */}
+                 {dataProvider.computeTravelerIssues(selectedTraveler, trip).length > 0 && (
+                   <section className="space-y-2">
+                      <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Pendências & Alertas</p>
+                      <div className="space-y-1">
+                         {dataProvider.computeTravelerIssues(selectedTraveler, trip).map((issue, idx) => (
+                           <div key={idx} className={`p-2 rounded-lg text-[10px] font-bold border ${issue.type === 'error' ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-amber-500/10 border-amber-500/30 text-amber-500'}`}>
+                              ⚠️ {issue.message}
+                           </div>
+                         ))}
+                      </div>
+                   </section>
+                 )}
+
+                 <section className="space-y-4">
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Informações de Contato</p>
+                    <div className="space-y-3">
+                       <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-gray-950 flex items-center justify-center border border-gray-800 text-indigo-400">📞</div>
+                          <div>
+                             <p className="text-xs text-gray-500 font-bold uppercase">Telefone</p>
+                             <p className="text-sm font-medium">{selectedTraveler.phone || 'Não informado'}</p>
+                          </div>
+                       </div>
+                       <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-gray-950 flex items-center justify-center border border-gray-800 text-indigo-400">✉️</div>
+                          <div>
+                             <p className="text-xs text-gray-500 font-bold uppercase">Email</p>
+                             <p className="text-sm font-medium truncate w-48">{selectedTraveler.email || 'Não informado'}</p>
+                          </div>
+                       </div>
+                    </div>
+                 </section>
+
+                 <section className="space-y-4">
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Documentação</p>
+                    <div className="p-4 bg-gray-950 rounded-2xl border border-gray-800 space-y-4">
+                       <div className="flex justify-between items-center">
+                          <Badge color="indigo">{selectedTraveler.docType}</Badge>
+                          {selectedTraveler.docExpiry && (
+                            <span className="text-[10px] text-gray-500 font-bold">Vence em: {new Date(selectedTraveler.docExpiry).toLocaleDateString('pt-BR')}</span>
+                          )}
+                       </div>
+                       <p className="text-lg font-black tracking-widest text-white">{selectedTraveler.docNumber || 'DOC PENDENTE'}</p>
+                    </div>
+                 </section>
+
+                 <section className="space-y-2">
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Participação</p>
+                    <div className="grid grid-cols-2 gap-2">
+                       <div className={`p-3 rounded-xl border flex flex-col items-center gap-1 ${selectedTraveler.isPayer ? 'bg-emerald-600/5 border-emerald-500/20 text-emerald-500' : 'bg-gray-950 border-gray-800 text-gray-500 opacity-50'}`}>
+                          <span className="text-xs font-bold">PAGANTE</span>
+                          <span className="text-[8px] font-black uppercase">{selectedTraveler.isPayer ? 'SIM' : 'NÃO'}</span>
+                       </div>
+                       <div className={`p-3 rounded-xl border flex flex-col items-center gap-1 ${selectedTraveler.canDrive ? 'bg-indigo-600/5 border-indigo-500/20 text-indigo-500' : 'bg-gray-950 border-gray-800 text-gray-500 opacity-50'}`}>
+                          <span className="text-xs font-bold">DIRIGE</span>
+                          <span className="text-[8px] font-black uppercase">{selectedTraveler.canDrive ? 'SIM' : 'NÃO'}</span>
+                       </div>
+                    </div>
+                 </section>
+              </div>
+
+              <footer className="p-6 border-t border-gray-800 bg-gray-950 flex gap-2">
+                 <Button variant="outline" className="flex-1" onClick={() => handleOpenWizard(selectedTraveler)}>Editar</Button>
+                 <Button variant="ghost" className="px-3" onClick={() => handleDelete(selectedTraveler.id)}>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                 </Button>
+              </footer>
+           </Card>
+         )}
+      </div>
+
+      {/* Modais */}
+      <Modal isOpen={isWizardOpen} onClose={() => setIsWizardOpen(false)} title={editingTraveler?.id ? "Editar Viajante" : "Novo Viajante"}>
+         <TravelerWizard 
+           trip={trip} 
+           initialData={editingTraveler || undefined}
+           onCancel={() => setIsWizardOpen(false)}
+           onSave={async (t) => {
+              await dataProvider.saveTraveler(t);
+              setIsWizardOpen(false);
+              loadTravelers();
+              onRefresh();
+           }}
+         />
+      </Modal>
+
+      <Modal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} title="Importar Viajantes em Lote">
+         <TravelerImportModal onImport={handleImport} onClose={() => setIsImportOpen(false)} />
+      </Modal>
+    </div>
+  );
+};
+
+export default TravelerList;

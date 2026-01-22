@@ -1,0 +1,191 @@
+
+import { Currency, Quote, QuoteStatus, PaymentMethod, SplitType } from '../../types';
+
+interface ParseOptions {
+  myNames: string[];
+  myPhones: string[];
+}
+
+export interface ParsedQuoteBlock {
+  id: string;
+  rawText: string;
+  vendorPhone: string;
+  vendorName: string;
+  title: string;
+  category: string;
+  currency: Currency;
+  totalAmount: number;
+  installments: number;
+  installmentValue: number;
+  confidence: 'alta' | 'média' | 'baixa';
+  missingFields: string[];
+  suggestedQuote: Partial<Quote>;
+}
+
+/**
+ * Normaliza o texto removendo caracteres invisíveis e padronizando formatos comuns
+ */
+const normalizeText = (text: string) => {
+  return text
+    .replace(/[\u200B-\u200D\uFEFF]/g, '') // Caracteres invisíveis
+    .replace(/[“”]/g, '"')
+    .replace(/(\d+)\s*[xX]/g, '$1x') // 10 X -> 10x
+    .replace(/R\$\s*/g, 'R$')
+    .replace(/U\$S?\s*/g, 'U$');
+};
+
+/**
+ * Tenta extrair valores monetários de um bloco de texto
+ */
+const extractPrices = (text: string) => {
+  const brlRegex = /R\$([\d.,]+)/gi;
+  const usdRegex = /U\$([\d.,]+)/gi;
+  
+  const parseVal = (s: string) => {
+    // Remove pontos de milhar e troca vírgula por ponto
+    const cleaned = s.replace(/\./g, '').replace(',', '.');
+    return parseFloat(cleaned);
+  };
+
+  const brlMatches = [...text.matchAll(brlRegex)].map(m => parseVal(m[1]));
+  const usdMatches = [...text.matchAll(usdRegex)].map(m => parseVal(m[1]));
+
+  return { brl: brlMatches, usd: usdMatches };
+};
+
+/**
+ * Analisa um bloco de mensagens para extrair campos estruturados
+ */
+const analyzeBlock = (text: string, vendorPhone: string): ParsedQuoteBlock => {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const firstLine = lines[0] || 'Orçamento sem título';
+  
+  // Heurística de Categoria
+  let category = 'Diversos';
+  const lowerText = text.toLowerCase();
+  if (/ticket|park|disney|universal|seaworld|ingress|parque/i.test(lowerText)) {
+    category = 'Parques Temáticos';
+  } else if (/pickup|dropoff|diária|locação|carro|van|mini van|alamo|hertz/i.test(lowerText)) {
+    category = 'Aluguel de Carro';
+  } else if (/hotel|hospedagem|quarto|stay/i.test(lowerText)) {
+    category = 'Hospedagem';
+  }
+
+  const prices = extractPrices(text);
+  const currency = prices.usd.length > prices.brl.length ? Currency.USD : Currency.BRL;
+  
+  // Tenta achar o valor mais alto (geralmente o total)
+  const allPrices = currency === Currency.USD ? prices.usd : prices.brl;
+  const totalAmount = allPrices.length > 0 ? Math.max(...allPrices) : 0;
+
+  // Parcelas
+  let installments = 1;
+  const installmentMatch = text.match(/(\d+)x/i);
+  if (installmentMatch) {
+    installments = parseInt(installmentMatch[1]);
+  }
+
+  // Validação e Confiança
+  const missing = [];
+  if (totalAmount === 0) missing.push('Preço total');
+  if (category === 'Diversos') missing.push('Categoria precisa');
+  
+  let confidence: 'alta' | 'média' | 'baixa' = 'alta';
+  if (missing.length > 0) confidence = 'média';
+  if (totalAmount === 0) confidence = 'baixa';
+
+  // PATCH BAIXO: Força taxa 1 para BRL no parser
+  const rate = currency === Currency.BRL ? 1 : 5.2;
+
+  return {
+    id: Math.random().toString(36).substr(2, 9),
+    rawText: text,
+    vendorPhone,
+    vendorName: vendorPhone, // No parser inicial o nome é o telefone
+    title: firstLine.length > 50 ? firstLine.substring(0, 50) + '...' : firstLine,
+    category,
+    currency,
+    totalAmount,
+    installments,
+    installmentValue: totalAmount / installments,
+    confidence,
+    missingFields: missing,
+    suggestedQuote: {
+      title: firstLine,
+      category,
+      currency,
+      totalAmount,
+      exchangeRate: rate,
+      amountBrl: totalAmount * rate,
+      validUntil: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+      status: QuoteStatus.ANALYSIS,
+      notesInternal: `Importado do WhatsApp\n---\n${text}`,
+      paymentTerms: {
+        methods: [installments > 1 ? PaymentMethod.CREDIT_CARD : PaymentMethod.PIX],
+        installments,
+        installmentValue: (totalAmount * rate) / installments
+      }
+    }
+  };
+};
+
+export const parseWhatsAppQuotes = (rawText: string, options: ParseOptions): ParsedQuoteBlock[] => {
+  const normalized = normalizeText(rawText);
+  
+  // Regex para identificar mensagens: [10:30, 20/01/2024] Daniel: Mensagem
+  // Ou 20/01/2024 10:30 - Daniel: Mensagem
+  const msgRegex = /(?:\[?(\d{2}\/\d{2}\/\d{2,4}),?\s+(\d{2}:\d{2})(?::\d{2})?\]?)\s*(?:-\s*)?([^:]+):\s*/g;
+  
+  const messages: { author: string; content: string }[] = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = msgRegex.exec(normalized)) !== null) {
+    if (messages.length > 0) {
+      messages[messages.length - 1].content = normalized.substring(lastIndex, match.index).trim();
+    }
+    messages.push({ author: match[3].trim(), content: '' });
+    lastIndex = msgRegex.lastIndex;
+  }
+  if (messages.length > 0) {
+    messages[messages.length - 1].content = normalized.substring(lastIndex).trim();
+  }
+
+  // Filtragem: ignorar minhas mensagens e mensagens inúteis
+  const filtered = messages.filter(m => {
+    const isMe = options.myNames.some(name => m.author.includes(name)) || 
+                 options.myPhones.some(phone => m.author.includes(phone));
+    if (isMe) return false;
+    
+    // Ignorar confirmações curtas sem dados
+    const lowerContent = m.content.toLowerCase();
+    if (m.content.length < 10 && !/R\$|U\$|\d/.test(m.content)) return false;
+    
+    return true;
+  });
+
+  // Agrupamento em blocos (Heurística: nova mensagem com preço ou palavra-chave inicia bloco)
+  const blocks: ParsedQuoteBlock[] = [];
+  let currentBlockText = "";
+  let currentAuthor = "";
+
+  filtered.forEach((msg) => {
+    const hasPrice = /R\$|U\$|Valor|Preço/i.test(msg.content);
+    const hasStrongKeywords = /Aluguel|Carro|Ingresso|Ticket|Hospedagem/i.test(msg.content);
+
+    // Se o autor mudou ou se a mensagem parece um novo orçamento, fecha o anterior
+    if (currentBlockText && (msg.author !== currentAuthor || (hasPrice && currentBlockText.length > 100))) {
+      blocks.push(analyzeBlock(currentBlockText, currentAuthor));
+      currentBlockText = "";
+    }
+
+    currentAuthor = msg.author;
+    currentBlockText += (currentBlockText ? "\n" : "") + msg.content;
+  });
+
+  if (currentBlockText) {
+    blocks.push(analyzeBlock(currentBlockText, currentAuthor));
+  }
+
+  return blocks;
+};
