@@ -1645,7 +1645,6 @@ export const supabaseDataProvider = {
       .from('td_traveler_profiles')
       .select('*')
       .eq('user_id', user.id)
-      .eq('status', 'active')
       .order('full_name', { ascending: true });
 
     if (error) throw error;
@@ -1663,7 +1662,6 @@ export const supabaseDataProvider = {
         .update({
           full_name: profile.fullName,
           nickname: profile.nickname,
-          type: profile.type,
           phone: profile.phone,
           email: profile.email,
           birth_date: profile.birthDate,
@@ -1686,14 +1684,12 @@ export const supabaseDataProvider = {
           user_id: user.id,
           full_name: profile.fullName,
           nickname: profile.nickname,
-          type: profile.type,
           phone: profile.phone,
           email: profile.email,
           birth_date: profile.birthDate,
           can_drive: profile.canDrive,
           tags: profile.tags,
-          notes: profile.notes,
-          status: 'active'
+          notes: profile.notes
         })
         .select()
         .single();
@@ -1706,7 +1702,7 @@ export const supabaseDataProvider = {
   deleteTravelerProfile: async (id: string) => {
     const { error } = await supabase
       .from('td_traveler_profiles')
-      .update({ status: 'archived' })
+      .delete()
       .eq('id', id);
 
     if (error) throw error;
@@ -1721,7 +1717,6 @@ export const supabaseDataProvider = {
       .from('td_vendor_profiles')
       .select('*')
       .eq('user_id', user.id)
-      .eq('status', 'active')
       .order('name', { ascending: true });
 
     if (error) throw error;
@@ -1908,5 +1903,510 @@ export const supabaseDataProvider = {
 
     if (error) throw error;
     return data;
+  },
+
+  // ==================== RESET DEMO ====================
+  resetDemo: async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Usuário não autenticado');
+
+    // 1. Limpar dados existentes do usuário
+    await supabase.from('td_payments').delete().in('trip_id', 
+      supabase.from('td_trips').select('id').eq('user_id', user.id)
+    );
+    await supabase.from('td_expense_splits').delete().in('expense_id',
+      supabase.from('td_expenses').select('id').in('trip_id',
+        supabase.from('td_trips').select('id').eq('user_id', user.id)
+      )
+    );
+    await supabase.from('td_reimbursements').delete().in('trip_id',
+      supabase.from('td_trips').select('id').eq('user_id', user.id)
+    );
+    await supabase.from('td_expenses').delete().in('trip_id',
+      supabase.from('td_trips').select('id').eq('user_id', user.id)
+    );
+    await supabase.from('td_quotes').delete().in('trip_id',
+      supabase.from('td_trips').select('id').eq('user_id', user.id)
+    );
+    await supabase.from('td_trip_vendors').delete().in('trip_id',
+      supabase.from('td_trips').select('id').eq('user_id', user.id)
+    );
+    await supabase.from('td_trip_travelers').delete().in('trip_id',
+      supabase.from('td_trips').select('id').eq('user_id', user.id)
+    );
+    await supabase.from('td_segments').delete().in('trip_id',
+      supabase.from('td_trips').select('id').eq('user_id', user.id)
+    );
+    await supabase.from('td_couples').delete().in('trip_id',
+      supabase.from('td_trips').select('id').eq('user_id', user.id)
+    );
+    await supabase.from('td_trips').delete().eq('user_id', user.id);
+    await supabase.from('td_vendor_profiles').delete().eq('user_id', user.id);
+    await supabase.from('td_traveler_profiles').delete().eq('user_id', user.id);
+
+    // 2. Criar perfis globais de viajantes
+    const travelers = [
+      { full_name: 'Daniel Silva', type: 'Adulto', email: 'daniel@demo.com', phone: '+55 11 98765-4321', birth_date: '1985-03-15', can_drive: true },
+      { full_name: 'Fabiana Silva', type: 'Adulto', email: 'fabiana@demo.com', phone: '+55 11 98765-4322', birth_date: '1987-07-22', can_drive: true },
+      { full_name: 'João Santos', type: 'Adulto', email: 'joao@demo.com', phone: '+55 11 98765-4323', birth_date: '1982-11-10', can_drive: true },
+      { full_name: 'Ana Santos', type: 'Adulto', email: 'ana@demo.com', phone: '+55 11 98765-4324', birth_date: '1984-05-18', can_drive: false },
+      { full_name: 'Pedro Santos', type: 'Criança', email: null, phone: null, birth_date: '2018-09-05', can_drive: false },
+      { full_name: 'Carlos Oliveira', type: 'Adulto', email: 'carlos@demo.com', phone: '+55 11 98765-4325', birth_date: '1990-01-30', can_drive: true },
+      { full_name: 'Bruna Oliveira', type: 'Adulto', email: 'bruna@demo.com', phone: '+55 11 98765-4326', birth_date: '1992-12-12', can_drive: false }
+    ];
+
+    const { data: travelerProfiles } = await supabase
+      .from('td_traveler_profiles')
+      .insert(travelers.map(t => ({ ...t, user_id: user.id, status: 'active' })))
+      .select();
+
+    // 3. Criar perfis globais de fornecedores
+    const vendors = [
+      { name: 'Disney Parks & Resorts', categories: ['Ingressos'], rating: 5, tags: ['Oficial', 'Confiável'] },
+      { name: 'SeaWorld Tickets BR', categories: ['Ingressos'], rating: 4, tags: ['Parceiro'] },
+      { name: 'Alamo Rent a Car', categories: ['Aluguel de Carro'], rating: 4, tags: ['Internacional'] },
+      { name: 'Walt Disney World Hotels', categories: ['Hospedagem'], rating: 5, tags: ['Premium'] },
+      { name: 'Universal Orlando', categories: ['Ingressos'], rating: 4, tags: ['Parque'] },
+      { name: 'Seguro Viagem XYZ', categories: ['Seguro'], rating: 3, tags: ['Nacional'] }
+    ];
+
+    const { data: vendorProfiles } = await supabase
+      .from('td_vendor_profiles')
+      .insert(vendors.map(v => ({ ...v, user_id: user.id, status: 'active' })))
+      .select();
+
+    // 4. Criar viagem demo
+    const { data: trip } = await supabase
+      .from('td_trips')
+      .insert({
+        user_id: user.id,
+        name: 'Orlando & Miami (Demo)',
+        start_date: '2026-11-06',
+        end_date: '2026-11-21',
+        base_currency: 'BRL',
+        default_exchange_rate: 1.0,
+        default_split_rule: 'equal',
+        consensus_rule: '2/3',
+        categories: ['Voo', 'Hospedagem', 'Aluguel de Carro', 'Ingressos', 'Restaurantes', 'Seguro', 'Diversos'],
+        destinations: ['Orlando', 'Miami'],
+        status: 'active'
+      })
+      .select()
+      .single();
+
+    // 5. Criar segmentos
+    await supabase.from('td_segments').insert([
+      { trip_id: trip.id, name: 'Orlando', start_date: '2026-11-06', end_date: '2026-11-18' },
+      { trip_id: trip.id, name: 'Miami', start_date: '2026-11-18', end_date: '2026-11-21' }
+    ]);
+
+    // 6. Criar casais
+    const { data: couples } = await supabase
+      .from('td_couples')
+      .insert([
+        { trip_id: trip.id, name: 'Casal 1 - Daniel & Fabiana' },
+        { trip_id: trip.id, name: 'Casal 2 - João & Ana' },
+        { trip_id: trip.id, name: 'Casal 3 - Carlos & Bruna' }
+      ])
+      .select();
+
+    // 7. Vincular viajantes à viagem
+    if (travelerProfiles && couples) {
+      await supabase.from('td_trip_travelers').insert([
+        { trip_id: trip.id, traveler_profile_id: travelerProfiles[0].id, couple_id: couples[0].id, is_payer: true, goes_to_segments: ['Orlando', 'Miami'] },
+        { trip_id: trip.id, traveler_profile_id: travelerProfiles[1].id, couple_id: couples[0].id, is_payer: true, goes_to_segments: ['Orlando', 'Miami'] },
+        { trip_id: trip.id, traveler_profile_id: travelerProfiles[2].id, couple_id: couples[1].id, is_payer: true, goes_to_segments: ['Orlando', 'Miami'] },
+        { trip_id: trip.id, traveler_profile_id: travelerProfiles[3].id, couple_id: couples[1].id, is_payer: true, goes_to_segments: ['Orlando', 'Miami'] },
+        { trip_id: trip.id, traveler_profile_id: travelerProfiles[4].id, couple_id: couples[1].id, is_payer: true, goes_to_segments: ['Orlando'] },
+        { trip_id: trip.id, traveler_profile_id: travelerProfiles[5].id, couple_id: couples[2].id, is_payer: true, goes_to_segments: ['Orlando', 'Miami'] },
+        { trip_id: trip.id, traveler_profile_id: travelerProfiles[6].id, couple_id: couples[2].id, is_payer: true, goes_to_segments: ['Orlando', 'Miami'] }
+      ]);
+    }
+
+    // 8. Vincular fornecedores à viagem (5 dos 6)
+    if (vendorProfiles) {
+      await supabase.from('td_trip_vendors').insert([
+        { trip_id: trip.id, vendor_profile_id: vendorProfiles[0].id, preferred: true },
+        { trip_id: trip.id, vendor_profile_id: vendorProfiles[1].id, preferred: false },
+        { trip_id: trip.id, vendor_profile_id: vendorProfiles[2].id, preferred: true, custom_notes: 'Atende via WhatsApp' },
+        { trip_id: trip.id, vendor_profile_id: vendorProfiles[3].id, preferred: false },
+        { trip_id: trip.id, vendor_profile_id: vendorProfiles[4].id, preferred: false }
+      ]);
+    }
+
+    // 9. Criar quotes (8 cotações)
+    const quotes = [
+      { title: 'Ingressos Disney 7 dias', category: 'Ingressos', provider: 'Disney Parks & Resorts', vendor_profile_id: vendorProfiles![0].id, currency: 'BRL', exchange_rate: 1.0, total_amount: 4200, amount_brl: 4200, status: 'Aprovada' },
+      { title: 'Ingressos SeaWorld', category: 'Ingressos', provider: 'SeaWorld Tickets BR', vendor_profile_id: vendorProfiles![1].id, currency: 'BRL', exchange_rate: 1.0, total_amount: 1800, amount_brl: 1800, status: 'Novo' },
+      { title: 'Aluguel Carro 15 dias', category: 'Aluguel de Carro', provider: 'Alamo Rent a Car', vendor_profile_id: vendorProfiles![2].id, currency: 'USD', exchange_rate: 5.0, total_amount: 600, amount_brl: 3000, status: 'Aprovada' },
+      { title: 'Hotel Disney Contemporary', category: 'Hospedagem', provider: 'Walt Disney World Hotels', vendor_profile_id: vendorProfiles![3].id, currency: 'BRL', exchange_rate: 1.0, total_amount: 15420, amount_brl: 15420, status: 'Aprovada' },
+      { title: 'Ingressos Universal 3 dias', category: 'Ingressos', provider: 'Universal Orlando', source_type: 'link', source_value: 'https://www.universalorlando.com/tickets', currency: 'BRL', exchange_rate: 1.0, total_amount: 2800, amount_brl: 2800, status: 'Novo' },
+      { title: 'Seguro Viagem Família', category: 'Seguro', provider: 'Seguro Viagem', source_type: 'texto', source_value: 'Cotação recebida via WhatsApp:\n\nSeguro família 7 pessoas\n15 dias\nCobertura: USD 100.000\nValor: R$ 850,00', currency: 'BRL', exchange_rate: 1.0, total_amount: 850, amount_brl: 850, status: 'Novo' },
+      { title: 'Transfer Aeroporto-Hotel', category: 'Transfer', provider: 'Transfer', source_type: 'manual', source_value: 'Indicação do amigo João - contato direto', currency: 'BRL', exchange_rate: 1.0, total_amount: 400, amount_brl: 400, status: 'Novo' },
+      { title: 'Restaurantes (estimativa)', category: 'Restaurantes', provider: 'Diversos', source_type: 'manual', source_value: 'Estimativa baseada em pesquisa: USD 100/dia para 7 pessoas', currency: 'BRL', exchange_rate: 1.0, total_amount: 7500, amount_brl: 7500, status: 'Novo' }
+    ];
+
+    const { data: createdQuotes } = await supabase
+      .from('td_quotes')
+      .insert(quotes.map(q => ({
+        trip_id: trip.id,
+        segment_id: null,
+        ...q,
+        valid_until: '2026-10-01',
+        votes: [],
+        completeness: 85,
+        tags: ['Demo'],
+        participant_ids: ['ALL'],
+        cancellation_policy: 'Conforme política do fornecedor',
+        created_by: user.id
+      })))
+      .select();
+
+    // 10. Criar expenses (fechar 3 quotes) e demonstrar diferentes modos de split
+    if (createdQuotes && couples) {
+      const expensesToCreate = [
+        { 
+          quote: createdQuotes[0], 
+          title: 'Ingressos Disney 7 dias', 
+          category: 'Ingressos', 
+          status: 'confirmed', 
+          splitMode: 'by_couple',
+          participationMode: 'all'
+        },
+        { 
+          quote: createdQuotes[2], 
+          title: 'Aluguel Carro 15 dias', 
+          category: 'Aluguel de Carro', 
+          status: 'confirmed', 
+          splitMode: 'by_couple',
+          participationMode: 'all'
+        },
+        { 
+          quote: createdQuotes[5], 
+          title: 'Seguro Viagem Família', 
+          category: 'Seguro', 
+          status: 'paid', 
+          splitMode: 'per_person',
+          participationMode: 'all'
+        }
+      ];
+
+      for (const exp of expensesToCreate) {
+        const { data: expense } = await supabase
+          .from('td_expenses')
+          .insert({
+            trip_id: trip.id,
+            segment_id: null,
+            category: exp.category,
+            title: exp.title,
+            vendor_profile_id: exp.quote.vendor_profile_id || null,
+            source_type: exp.quote.source_type || null,
+            source_value: exp.quote.source_value || null,
+            source_quote_id: exp.quote.id,
+            currency: exp.quote.currency,
+            amount: exp.quote.total_amount,
+            exchange_rate: exp.quote.exchange_rate,
+            amount_brl: exp.quote.amount_brl,
+            status: exp.status,
+            split_mode: exp.splitMode,
+            participation_mode: exp.participationMode
+          })
+          .select()
+          .single();
+
+        // Usar a nova função recalculateExpenseSplits para criar os splits
+        if (expense) {
+          await supabaseDataProvider.recalculateExpenseSplits(expense.id, {
+            splitMode: exp.splitMode as any,
+            participationMode: exp.participationMode as any
+          });
+
+          // Criar pagamentos
+          if (exp.status === 'paid') {
+            await supabase.from('td_payments').insert({
+              trip_id: trip.id,
+              expense_id: expense.id,
+              paid_by_couple_id: couples[0].id,
+              method: 'pix',
+              paid_amount_brl: expense.amount_brl,
+              paid_at: new Date().toISOString()
+            });
+          }
+        }
+
+        // Atualizar quote para fechada
+        await supabase
+          .from('td_quotes')
+          .update({ status: 'Fechada' })
+          .eq('id', exp.quote.id);
+      }
+    }
+
+    return trip.id;
+  },
+
+  // ==================== SETUP STATS ====================
+  getTripSetupStats: async (tripId: string) => {
+    const [
+      { count: travelersCount },
+      { count: vendorsCount },
+      { count: quotesCount },
+      { count: expensesCount },
+      { count: paymentsCount }
+    ] = await Promise.all([
+      supabase.from('td_trip_travelers').select('*', { count: 'exact', head: true }).eq('trip_id', tripId),
+      supabase.from('td_trip_vendors').select('*', { count: 'exact', head: true }).eq('trip_id', tripId),
+      supabase.from('td_quotes').select('*', { count: 'exact', head: true }).eq('trip_id', tripId),
+      supabase.from('td_expenses').select('*', { count: 'exact', head: true }).eq('trip_id', tripId),
+      supabase.from('td_payments').select('*', { count: 'exact', head: true }).eq('trip_id', tripId)
+    ]);
+
+    return {
+      travelersCount: travelersCount || 0,
+      vendorsCount: vendorsCount || 0,
+      quotesCount: quotesCount || 0,
+      expensesCount: expensesCount || 0,
+      paymentsCount: paymentsCount || 0
+    };
+  },
+
+  // ==================== EXPENSE SPLITS RECALCULATION ====================
+  recalculateExpenseSplits: async (
+    expenseId: string,
+    opts?: {
+      splitMode?: 'by_couple' | 'per_person' | 'custom';
+      participationMode?: 'inherit' | 'all' | 'paying_only' | 'manual';
+      manualSelectedTripTravelerIds?: string[];
+      manualSelectedCoupleIds?: string[];
+    }
+  ) => {
+    // 1) Carregar expense + trip defaults
+    const { data: expense, error: expenseError } = await supabase
+      .from('td_expenses')
+      .select('*, trip:td_trips(*)')
+      .eq('id', expenseId)
+      .single();
+
+    if (expenseError || !expense) {
+      throw new Error('Expense não encontrada');
+    }
+
+    const trip = expense.trip;
+
+    // 2) Determinar effectiveSplitMode
+    const effectiveSplitMode = opts?.splitMode || expense.split_mode || trip.default_split_mode || 'by_couple';
+
+    // 3) Determinar effectiveParticipationMode
+    let effectiveParticipationMode = opts?.participationMode || expense.participation_mode || 'inherit';
+    if (effectiveParticipationMode === 'inherit') {
+      effectiveParticipationMode = trip.default_participation_mode || 'paying_only';
+    }
+
+    // 4) Carregar participantes da viagem (trip_travelers com join de perfil)
+    const { data: tripTravelers, error: travelersError } = await supabase
+      .from('td_trip_travelers')
+      .select(`
+        *,
+        profile:td_traveler_profiles(*)
+      `)
+      .eq('trip_id', expense.trip_id)
+      .neq('status', 'Arquivado');
+
+    if (travelersError || !tripTravelers) {
+      throw new Error('Erro ao carregar viajantes');
+    }
+
+    // 5) Carregar casais
+    const { data: couples, error: couplesError } = await supabase
+      .from('td_couples')
+      .select('*')
+      .eq('trip_id', expense.trip_id);
+
+    if (couplesError) {
+      throw new Error('Erro ao carregar casais');
+    }
+
+    // 6) Deletar splits antigos
+    await supabase.from('td_expense_splits').delete().eq('expense_id', expenseId);
+
+    const newSplits: any[] = [];
+
+    // 7) Gerar splits conforme regras
+    if (effectiveSplitMode === 'per_person') {
+      // Filtrar participantes
+      let participants = tripTravelers;
+
+      if (effectiveParticipationMode === 'all') {
+        participants = tripTravelers.filter(t => t.count_in_split === true);
+      } else if (effectiveParticipationMode === 'paying_only') {
+        participants = tripTravelers.filter(t => t.count_in_split === true && t.is_payer === true);
+      } else if (effectiveParticipationMode === 'manual') {
+        if (!opts?.manualSelectedTripTravelerIds || opts.manualSelectedTripTravelerIds.length === 0) {
+          throw new Error('Modo manual requer seleção de viajantes');
+        }
+        participants = tripTravelers.filter(t => opts.manualSelectedTripTravelerIds!.includes(t.id));
+      }
+
+      if (participants.length === 0) {
+        throw new Error('Nenhum participante encontrado para divisão');
+      }
+
+      const amountPerPerson = expense.amount_brl / participants.length;
+
+      participants.forEach(traveler => {
+        newSplits.push({
+          expense_id: expenseId,
+          trip_id: expense.trip_id,
+          trip_traveler_id: traveler.id,
+          participant_type: 'traveler',
+          split_type: 'equal',
+          amount_brl: amountPerPerson
+        });
+      });
+
+    } else if (effectiveSplitMode === 'by_couple') {
+      // Derivar couples disponíveis
+      const availableCouples = couples || [];
+      
+      // Viajantes sem couple_id (individuais)
+      const individualsWithoutCouple = tripTravelers.filter(t => !t.couple_id);
+
+      let participatingCouples = availableCouples;
+
+      if (effectiveParticipationMode === 'manual') {
+        if (!opts?.manualSelectedCoupleIds || opts.manualSelectedCoupleIds.length === 0) {
+          throw new Error('Modo manual requer seleção de casais');
+        }
+        participatingCouples = availableCouples.filter(c => opts.manualSelectedCoupleIds!.includes(c.id));
+      }
+
+      // Avisar se há viajantes sem grupo (não vamos incluí-los no split por casal)
+      const warnings: string[] = [];
+      if (individualsWithoutCouple.length > 0) {
+        warnings.push(`${individualsWithoutCouple.length} viajante(s) sem grupo não entram no racha por casal`);
+      }
+
+      if (participatingCouples.length === 0) {
+        throw new Error('Nenhum casal encontrado para divisão');
+      }
+
+      const amountPerCouple = expense.amount_brl / participatingCouples.length;
+
+      participatingCouples.forEach(couple => {
+        newSplits.push({
+          expense_id: expenseId,
+          trip_id: expense.trip_id,
+          couple_id: couple.id,
+          participant_type: 'couple',
+          split_type: 'equal',
+          amount_brl: amountPerCouple
+        });
+      });
+
+    } else if (effectiveSplitMode === 'custom') {
+      // Modo custom: não recalcular automaticamente
+      // Retornar vazio e deixar UI gerenciar
+      return {
+        splits: [],
+        summary: {
+          mode: 'custom',
+          message: 'Modo customizado: edite os valores manualmente'
+        }
+      };
+    }
+
+    // 8) Inserir splits em lote
+    if (newSplits.length > 0) {
+      const { error: insertError } = await supabase
+        .from('td_expense_splits')
+        .insert(newSplits);
+
+      if (insertError) {
+        throw new Error('Erro ao inserir splits: ' + insertError.message);
+      }
+    }
+
+    // 9) Retornar splits gerados + resumo
+    return {
+      splits: newSplits,
+      summary: {
+        mode: effectiveSplitMode,
+        participationMode: effectiveParticipationMode,
+        count: newSplits.length,
+        amountPerUnit: newSplits.length > 0 ? newSplits[0].amount_brl : 0
+      }
+    };
+  },
+
+  // ==================== DOCUMENTOS GLOBAIS ====================
+  
+  getTravelerProfileDocuments: async (travelerProfileId: string) => {
+    const { data, error } = await supabase
+      .from('td_traveler_profile_documents')
+      .select('*')
+      .eq('traveler_profile_id', travelerProfileId)
+      .order('is_primary', { ascending: false })
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  saveTravelerProfileDocument: async (doc: any) => {
+    if (doc.id) {
+      // Update
+      const { data, error } = await supabase
+        .from('td_traveler_profile_documents')
+        .update({
+          doc_type: doc.docType,
+          doc_category: doc.docCategory,
+          doc_number_last4: doc.docNumberLast4,
+          doc_expiry: doc.docExpiry,
+          issue_date: doc.issueDate,
+          issuing_country: doc.issuingCountry,
+          issuer_state: doc.issuerState,
+          issuer_agency: doc.issuerAgency,
+          is_primary: doc.isPrimary,
+          notes: doc.notes,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', doc.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } else {
+      // Insert
+      const { data, error } = await supabase
+        .from('td_traveler_profile_documents')
+        .insert({
+          traveler_profile_id: doc.travelerProfileId,
+          doc_type: doc.docType,
+          doc_category: doc.docCategory,
+          doc_number_last4: doc.docNumberLast4,
+          doc_expiry: doc.docExpiry,
+          issue_date: doc.issueDate,
+          issuing_country: doc.issuingCountry,
+          issuer_state: doc.issuerState,
+          issuer_agency: doc.issuerAgency,
+          is_primary: doc.isPrimary,
+          notes: doc.notes
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    }
+  },
+
+  deleteTravelerProfileDocument: async (documentId: string) => {
+    const { error } = await supabase
+      .from('td_traveler_profile_documents')
+      .delete()
+      .eq('id', documentId);
+
+    if (error) throw error;
   }
 };
