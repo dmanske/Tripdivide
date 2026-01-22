@@ -25,6 +25,7 @@ import TripList from './components/TripList';
 import TripWizard from './components/TripWizard';
 import TripDashboard from './components/TripDashboard';
 import TravelerProfileList from './components/TravelerProfileList';
+import TravelerProfileDetailPage from './components/TravelerProfileDetailPage';
 import VendorProfileList from './components/VendorProfileList';
 import { Trip, Quote, Expense, Vendor } from './types';
 import { dataProvider } from './lib/dataProvider';
@@ -37,6 +38,7 @@ type ViewState =
   | { type: 'trip-dashboard'; tripId: string } // Dashboard de uma viagem específica
   | { type: 'travelers'; tripId?: string } // Viajantes (global ou por viagem)
   | { type: 'traveler-detail'; id: string; tripId?: string }
+  | { type: 'traveler-profile-detail'; profileId: string } // Detalhe do perfil global
   | { type: 'vendors'; tripId?: string } // Fornecedores (global ou por viagem)
   | { type: 'vendor-detail'; id: string; tripId?: string }
   | { type: 'vendor-edit'; id?: string; tripId?: string }
@@ -81,81 +83,70 @@ const App: React.FC = () => {
   const loadData = async (tripId?: string) => {
     if (!user) return;
     
+    // Se não foi passado tripId, limpar estado e retornar
+    if (!tripId) {
+      setActiveTripId(null);
+      setTrip(null);
+      setVendors([]);
+      setQuotes([]);
+      setExpenses([]);
+      return;
+    }
+    
     setLoading(true);
     try {
-      // Buscar viagem ativa ou usar tripId fornecido
-      let currentTripId = tripId;
-      if (!currentTripId) {
-        currentTripId = await supabaseDataProvider.getActiveTrip();
-      }
+      setActiveTripId(tripId);
+      const currentTrip = await supabaseDataProvider.getTripById(tripId);
+      
+      // Load related data
+      const [couples, segments, vs, qs, es] = await Promise.all([
+        dataProvider.getCouples(tripId),
+        dataProvider.getSegments(tripId),
+        dataProvider.getVendors(tripId),
+        dataProvider.getQuotes(tripId),
+        dataProvider.getExpenses(tripId)
+      ]);
 
-      if (!currentTripId) {
-        // Buscar primeira viagem disponível
-        const tripsList = await supabaseDataProvider.getTrips();
-        const activeTrips = tripsList.filter((t: any) => t.status === 'active');
-        if (activeTrips.length > 0) {
-          currentTripId = activeTrips[0].id;
-          await supabaseDataProvider.setActiveTrip(currentTripId);
-        }
-      }
+      // Load travelers for each couple
+      const travelers = await dataProvider.getTravelers(tripId);
+      
+      // Build couples with members
+      const couplesWithMembers = couples.map(c => ({
+        id: c.id,
+        name: c.name,
+        members: travelers
+          .filter(t => t.couple_id === c.id)
+          .map(t => ({
+            id: t.id,
+            name: t.full_name,
+            isChild: t.type !== 'Adulto'
+          }))
+      }));
 
-      if (currentTripId) {
-        setActiveTripId(currentTripId);
-        const currentTrip = await supabaseDataProvider.getTripById(currentTripId);
-        
-        // Load related data
-        const [couples, segments, vs, qs, es] = await Promise.all([
-          dataProvider.getCouples(currentTripId),
-          dataProvider.getSegments(currentTripId),
-          dataProvider.getVendors(currentTripId),
-          dataProvider.getQuotes(currentTripId),
-          dataProvider.getExpenses(currentTripId)
-        ]);
+      // Build segments
+      const segmentsFormatted = segments.map(s => ({
+        id: s.id,
+        name: s.name,
+        startDate: s.start_date,
+        endDate: s.end_date
+      }));
 
-        // Load travelers for each couple
-        const travelers = await dataProvider.getTravelers(currentTripId);
-        
-        // Build couples with members
-        const couplesWithMembers = couples.map(c => ({
-          id: c.id,
-          name: c.name,
-          members: travelers
-            .filter(t => t.couple_id === c.id)
-            .map(t => ({
-              id: t.id,
-              name: t.full_name,
-              isChild: t.type !== 'Adulto'
-            }))
-        }));
+      // Build complete trip object
+      const completeTrip: Trip = {
+        id: currentTrip.id,
+        name: currentTrip.name,
+        startDate: currentTrip.start_date,
+        endDate: currentTrip.end_date,
+        consensusRule: currentTrip.consensus_rule,
+        categories: currentTrip.categories,
+        couples: couplesWithMembers,
+        segments: segmentsFormatted.length > 0 ? segmentsFormatted : [{ id: 'seg-all', name: 'Geral', startDate: '', endDate: '' }]
+      };
 
-        // Build segments
-        const segmentsFormatted = segments.map(s => ({
-          id: s.id,
-          name: s.name,
-          startDate: s.start_date,
-          endDate: s.end_date
-        }));
-
-        // Build complete trip object
-        const completeTrip: Trip = {
-          id: currentTrip.id,
-          name: currentTrip.name,
-          startDate: currentTrip.start_date,
-          endDate: currentTrip.end_date,
-          consensusRule: currentTrip.consensus_rule,
-          categories: currentTrip.categories,
-          couples: couplesWithMembers,
-          segments: segmentsFormatted.length > 0 ? segmentsFormatted : [{ id: 'seg-all', name: 'Geral', startDate: '', endDate: '' }]
-        };
-
-        setTrip(completeTrip);
-        setVendors(vs);
-        setQuotes(qs);
-        setExpenses(es);
-      } else {
-        setTrip(null);
-        setActiveTripId(null);
-      }
+      setTrip(completeTrip);
+      setVendors(vs);
+      setQuotes(qs);
+      setExpenses(es);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
     } finally {
@@ -165,9 +156,14 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (user) {
-      // Não carrega viagem automaticamente
-      // Usuário começa no dashboard geral
       setShowLanding(false);
+      // Sempre começar no dashboard geral após login
+      setActiveTripId(null);
+      setTrip(null);
+      setVendors([]);
+      setQuotes([]);
+      setExpenses([]);
+      setView({ type: 'general-dashboard' });
     }
   }, [user]);
 
@@ -189,17 +185,28 @@ const App: React.FC = () => {
   // Função para abrir uma viagem (entrar no modo viagem)
   const openTrip = async (tripId: string) => {
     await loadData(tripId);
-    setActiveTripId(tripId);
     setView({ type: 'trip-dashboard', tripId });
   };
 
   // Função para fechar viagem (voltar ao modo geral)
-  const closeTrip = () => {
+  const closeTrip = async () => {
+    // Limpar estado local
     setActiveTripId(null);
     setTrip(null);
     setVendors([]);
     setQuotes([]);
     setExpenses([]);
+    
+    // Limpar viagem ativa persistida no banco
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase
+        .from('td_user_active_trip')
+        .delete()
+        .eq('user_id', user.id);
+    }
+    
+    // Voltar ao dashboard geral
     setView({ type: 'general-dashboard' });
   };
 
@@ -328,7 +335,7 @@ const App: React.FC = () => {
 
               setShowTripWizard(false);
               await loadData(newTrip.id);
-              setView({ type: 'dashboard' });
+              setView({ type: 'trip-dashboard', tripId: newTrip.id });
             }}
           />
         )}
@@ -356,12 +363,26 @@ const App: React.FC = () => {
           return <TravelerList trip={trip} onRefresh={() => loadData(view.tripId!)} onNavigateToDetail={(id) => setView({ type: 'traveler-detail', id, tripId: view.tripId })} />;
         } else {
           // Modo geral: gerenciar perfis globais
-          return <TravelerProfileList onNavigate={(tab) => setView({ type: tab as any })} />;
+          return <TravelerProfileList onNavigate={(tab) => {
+            if (tab.startsWith('profile-')) {
+              const profileId = tab.replace('profile-', '');
+              setView({ type: 'traveler-profile-detail', profileId });
+            } else {
+              setView({ type: tab as any });
+            }
+          }} />;
         }
       
       case 'traveler-detail': 
         if (!trip) return null;
         return <TravelerDetailPage trip={trip} travelerId={view.id} onBack={() => setView({ type: 'travelers', tripId: view.tripId })} onRefresh={() => loadData(activeTripId!)} />;
+
+      case 'traveler-profile-detail':
+        return <TravelerProfileDetailPage 
+          profileId={view.profileId} 
+          onBack={() => setView({ type: 'travelers' })} 
+          onRefresh={() => {}} 
+        />;
 
       case 'vendors': 
         if (view.tripId && trip) {
@@ -470,7 +491,7 @@ const App: React.FC = () => {
             setShowTripWizard(false);
             setShowLanding(false);
             await loadData(newTrip.id);
-            setView({ type: 'dashboard' });
+            setView({ type: 'trip-dashboard', tripId: newTrip.id });
           }}
         />
       )}
