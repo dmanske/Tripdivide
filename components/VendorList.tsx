@@ -90,21 +90,64 @@ const VendorList: React.FC<VendorListProps> = ({ trip, onRefresh, onNavigateToVe
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-black text-white uppercase tracking-tighter">Fornecedores</h2>
-          <p className="text-gray-500">Gestão de parceiros e reputação</p>
+          <p className="text-sm text-gray-500 mt-1">Parceiros vinculados a esta viagem</p>
         </div>
         <div className="flex gap-2">
-           <Button variant="outline" onClick={() => setIsLinkModalOpen(true)}>+ Adicionar da minha lista</Button>
-           <Button variant="primary" onClick={() => setIsQuickCreateOpen(true)}>+ Criar Novo</Button>
+           <Button variant="outline" onClick={() => setIsLinkModalOpen(true)}>
+             <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+             </svg>
+             Vincular Existente
+           </Button>
+           <Button variant="primary" onClick={() => setIsQuickCreateOpen(true)}>
+             <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+             </svg>
+             Criar Novo
+           </Button>
         </div>
       </header>
 
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="!bg-indigo-600/20 !border-indigo-600/30">
+          <div className="text-center">
+            <div className="text-3xl font-black text-white">{tripVendors.length}</div>
+            <div className="text-xs text-gray-400 mt-1 uppercase font-bold">Total</div>
+          </div>
+        </Card>
+        <Card className="!bg-amber-600/20 !border-amber-600/30">
+          <div className="text-center">
+            <div className="text-3xl font-black text-white">{tripVendors.filter(tv => tv.preferred).length}</div>
+            <div className="text-xs text-gray-400 mt-1 uppercase font-bold">Favoritos</div>
+          </div>
+        </Card>
+        <Card className="!bg-green-600/20 !border-green-600/30">
+          <div className="text-center">
+            <div className="text-3xl font-black text-white">
+              {tripVendors.filter(tv => tv.profile?.rating >= 4 && (tv.profile?.risk_flags?.length || 0) === 0).length}
+            </div>
+            <div className="text-xs text-gray-400 mt-1 uppercase font-bold">Confiáveis</div>
+          </div>
+        </Card>
+        <Card className="!bg-red-600/20 !border-red-600/30">
+          <div className="text-center">
+            <div className="text-3xl font-black text-white">
+              {tripVendors.filter(tv => (tv.profile?.risk_flags?.length || 0) > 0).length}
+            </div>
+            <div className="text-xs text-gray-400 mt-1 uppercase font-bold">Com Alertas</div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Search and Filter */}
       <Card className="!p-4 bg-gray-900/40 border-gray-800">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
            <div className="md:col-span-2">
-              <Input placeholder="Buscar fornecedor ou tag..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+              <Input placeholder="🔍 Buscar por nome, categoria ou tag..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
            </div>
            <Input as="select" value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
-              <option value="all">Todas as categorias</option>
+              <option value="all">📂 Todas as categorias</option>
               {trip.categories.map(c => <option key={c} value={c}>{c}</option>)}
            </Input>
         </div>
@@ -114,46 +157,153 @@ const VendorList: React.FC<VendorListProps> = ({ trip, onRefresh, onNavigateToVe
         <Card className="py-16 text-center bg-gray-900/40 border-gray-800">
           <div className="max-w-md mx-auto space-y-4">
             <div className="text-6xl mb-4">🏢</div>
-            <h3 className="text-xl font-bold text-white">Nenhum fornecedor vinculado</h3>
+            <h3 className="text-xl font-bold text-white">
+              {tripVendors.length === 0 ? 'Nenhum fornecedor vinculado' : 'Nenhum resultado encontrado'}
+            </h3>
             <p className="text-gray-500 text-sm">
-              Fornecedores são perfis globais reutilizáveis. Vincule fornecedores existentes ou crie novos para esta viagem.
+              {tripVendors.length === 0 
+                ? 'Fornecedores são perfis globais reutilizáveis. Vincule fornecedores existentes ou crie novos para esta viagem.'
+                : 'Tente ajustar os filtros de busca para encontrar o que procura.'
+              }
             </p>
-            <div className="flex gap-3 justify-center pt-4">
-              <Button variant="outline" onClick={() => setIsLinkModalOpen(true)}>
-                + Adicionar da minha lista
-              </Button>
-              <Button variant="primary" onClick={() => setIsQuickCreateOpen(true)}>
-                + Criar novo agora
-              </Button>
-            </div>
+            {tripVendors.length === 0 && (
+              <div className="flex gap-3 justify-center pt-4">
+                <Button variant="outline" onClick={() => setIsLinkModalOpen(true)}>
+                  <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                  Vincular da minha lista
+                </Button>
+                <Button variant="primary" onClick={() => setIsQuickCreateOpen(true)}>
+                  <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Criar novo agora
+                </Button>
+              </div>
+            )}
           </div>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredVendors.map(tv => {
             const profile = tv.profile;
             if (!profile) return null;
             
             const isReliable = profile.rating >= 4 && (profile.risk_flags?.length || 0) === 0;
+            const hasRisks = (profile.risk_flags?.length || 0) > 0;
+            
             return (
-              <Card key={tv.id} onClick={() => setEditingTripVendor(tv)} className="group relative border-2 hover:border-indigo-500 transition-all cursor-pointer">
-                {tv.preferred && <div className="absolute top-0 right-0 w-10 h-10 bg-indigo-600 text-white flex items-center justify-center font-bold text-lg rounded-bl-2xl">⭐</div>}
-                <div className="flex flex-col gap-4">
-                   <div className="flex justify-between items-start pr-8">
-                      <div>
-                         <h4 className="text-xl font-black text-white uppercase leading-tight group-hover:text-indigo-400 transition-colors">{profile.name}</h4>
-                         <div className="flex flex-wrap gap-1 mt-1">
-                            {(profile.categories || []).map((cat: string) => <span key={cat} className="text-[9px] font-black uppercase text-indigo-400">{cat}</span>)}
-                         </div>
-                      </div>
-                      {isReliable && <Badge color="green">OK</Badge>}
-                   </div>
-                   <div className="flex gap-1">
-                      {[1,2,3,4,5].map(s => <span key={s} className={`text-xs ${profile.rating >= s ? 'text-amber-400' : 'text-gray-800'}`}>★</span>)}
-                   </div>
-                   <div className="pt-4 border-t border-gray-800 flex justify-between items-center">
-                      <span className="text-[10px] text-gray-600 font-bold uppercase">Clique para configurar</span>
-                   </div>
+              <Card 
+                key={tv.id} 
+                onClick={() => setEditingTripVendor(tv)} 
+                className="group relative hover:!border-indigo-500 transition-all cursor-pointer !p-0 overflow-hidden"
+              >
+                {/* Badge de Favorito */}
+                {tv.preferred && (
+                  <div className="absolute top-0 right-0 z-10">
+                    <div className="bg-gradient-to-br from-amber-500 to-amber-600 text-white px-3 py-1 rounded-bl-xl shadow-lg">
+                      <span className="text-xs font-black uppercase flex items-center gap-1">
+                        ⭐ Favorito
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="p-4 space-y-4">
+                  {/* Header */}
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1 pr-2">
+                      <h4 className="text-lg font-black text-white uppercase leading-tight group-hover:text-indigo-400 transition-colors">
+                        {profile.name}
+                      </h4>
+                      {profile.legal_name && (
+                        <p className="text-[10px] text-gray-600 mt-0.5">{profile.legal_name}</p>
+                      )}
+                    </div>
+                    {hasRisks ? (
+                      <Badge color="red" className="text-[9px]">⚠️ {profile.risk_flags.length}</Badge>
+                    ) : isReliable ? (
+                      <Badge color="green" className="text-[9px]">✓ OK</Badge>
+                    ) : (
+                      <Badge color="gray" className="text-[9px]">—</Badge>
+                    )}
+                  </div>
+
+                  {/* Categories */}
+                  {profile.categories && profile.categories.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {profile.categories.slice(0, 3).map((cat: string) => (
+                        <span key={cat} className="text-[9px] px-2 py-0.5 bg-indigo-600/20 text-indigo-400 rounded font-bold uppercase">
+                          {cat}
+                        </span>
+                      ))}
+                      {profile.categories.length > 3 && (
+                        <span className="text-[9px] px-2 py-0.5 bg-gray-800 text-gray-500 rounded font-bold">
+                          +{profile.categories.length - 3}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Rating */}
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-0.5">
+                      {[1,2,3,4,5].map(s => (
+                        <span key={s} className={`text-sm ${profile.rating >= s ? 'text-amber-400' : 'text-gray-800'}`}>★</span>
+                      ))}
+                    </div>
+                    <span className="text-xs text-gray-600">({profile.rating}/5)</span>
+                  </div>
+
+                  {/* Links rápidos */}
+                  <div className="flex items-center gap-2 pt-3 border-t border-gray-800">
+                    {profile.website_url && (
+                      <a 
+                        href={profile.website_url.startsWith('http') ? profile.website_url : `https://${profile.website_url}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-8 h-8 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 flex items-center justify-center text-indigo-400 transition-colors"
+                        title="Website"
+                      >
+                        🌐
+                      </a>
+                    )}
+                    {profile.instagram_url && (
+                      <a 
+                        href={profile.instagram_url.startsWith('@') ? `https://instagram.com/${profile.instagram_url.slice(1)}` : `https://instagram.com/${profile.instagram_url}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-8 h-8 rounded-lg bg-pink-600/20 hover:bg-pink-600/30 flex items-center justify-center text-pink-400 transition-colors"
+                        title="Instagram"
+                      >
+                        📸
+                      </a>
+                    )}
+                    {profile.youtube_url && (
+                      <a 
+                        href={profile.youtube_url.startsWith('http') ? profile.youtube_url : `https://youtube.com/${profile.youtube_url}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-8 h-8 rounded-lg bg-red-600/20 hover:bg-red-600/30 flex items-center justify-center text-red-400 transition-colors"
+                        title="YouTube"
+                      >
+                        📺
+                      </a>
+                    )}
+                    <div className="flex-1"></div>
+                    <span className="text-[9px] text-gray-600 font-bold uppercase">Clique para editar</span>
+                  </div>
+
+                  {/* Custom notes preview */}
+                  {tv.custom_notes && (
+                    <div className="pt-3 border-t border-gray-800">
+                      <p className="text-xs text-gray-500 italic line-clamp-2">{tv.custom_notes}</p>
+                    </div>
+                  )}
                 </div>
               </Card>
             );

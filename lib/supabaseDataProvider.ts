@@ -1977,6 +1977,7 @@ export const supabaseDataProvider = {
       contacts: profile.contacts || [],
       website_url: profile.websiteUrl,
       instagram_url: profile.instagramUrl,
+      youtube_url: profile.youtubeUrl,
       payment_terms_default: profile.paymentTermsDefault,
       cancellation_policy_notes: profile.cancellationPolicyNotes,
       updated_at: new Date().toISOString()
@@ -2119,5 +2120,49 @@ export const supabaseDataProvider = {
 
     if (error) throw error;
     return data;
+  },
+
+  // ==================== VENDOR PROFILE HISTORY ====================
+  getVendorProfileHistory: async (profileId: string) => {
+    // Buscar viagens onde este fornecedor está vinculado
+    const { data: tripVendors, error: tvError } = await supabase
+      .from('td_trip_vendors')
+      .select(`
+        id,
+        created_at,
+        preferred,
+        trip:td_trips(id, name, start_date, end_date, status)
+      `)
+      .eq('vendor_profile_id', profileId)
+      .order('created_at', { ascending: false });
+
+    if (tvError) throw tvError;
+
+    // Buscar orçamentos deste fornecedor
+    const { data: quotes, error: qError } = await supabase
+      .from('td_quotes')
+      .select(`
+        id,
+        title,
+        category,
+        total_amount,
+        currency,
+        amount_brl,
+        status,
+        created_at,
+        trip:td_trips(id, name)
+      `)
+      .eq('vendor_profile_id', profileId)
+      .order('created_at', { ascending: false });
+
+    if (qError) throw qError;
+
+    return {
+      trips: tripVendors || [],
+      quotes: quotes || [],
+      totalTrips: (tripVendors || []).length,
+      totalQuotes: (quotes || []).length,
+      totalValue: (quotes || []).reduce((sum, q) => sum + (q.amount_brl || 0), 0)
+    };
   }
 };

@@ -27,6 +27,7 @@ import TripDashboard from './components/TripDashboard';
 import TravelerProfileList from './components/TravelerProfileList';
 import TravelerProfileDetailPage from './components/TravelerProfileDetailPage';
 import VendorProfileList from './components/VendorProfileList';
+import VendorProfileDetailPage from './components/VendorProfileDetailPage';
 import { Trip, Quote, Expense, Vendor } from './types';
 import { dataProvider } from './lib/dataProvider';
 import { supabaseDataProvider } from './lib/supabaseDataProvider';
@@ -41,6 +42,7 @@ type ViewState =
   | { type: 'traveler-profile-detail'; profileId: string; returnTo?: ViewState } // Detalhe do perfil global
   | { type: 'vendors'; tripId?: string } // Fornecedores (global ou por viagem)
   | { type: 'vendor-detail'; id: string; tripId?: string }
+  | { type: 'vendor-profile-detail'; profileId: string; returnTo?: ViewState } // Detalhe do perfil global de fornecedor
   | { type: 'vendor-edit'; id?: string; tripId?: string }
   | { type: 'quotes'; tripId: string }
   | { type: 'quote-detail'; id: string; tripId: string }
@@ -398,7 +400,7 @@ const App: React.FC = () => {
           return <VendorList trip={trip} onRefresh={() => loadData(view.tripId!)} onNavigateToVendor={(id) => setView({ type: 'vendor-detail', id, tripId: view.tripId })} onNavigateToWizard={() => setView({ type: 'vendor-edit', tripId: view.tripId })} />;
         } else {
           // Modo geral: gerenciar perfis globais
-          return <VendorProfileList onNavigate={(tab) => setView({ type: tab as any })} />;
+          return <VendorProfileList onNavigateToDetail={(profileId) => setView({ type: 'vendor-profile-detail', profileId, returnTo: { type: 'vendors' } })} />;
         }
       
       case 'vendor-detail': {
@@ -407,6 +409,15 @@ const App: React.FC = () => {
         if (!v) return null;
         return <VendorDetailView trip={trip} vendor={v} onBack={() => setView({ type: 'vendors', tripId: view.tripId })} onEdit={() => setView({ type: 'vendor-edit', id: v.id, tripId: view.tripId })} onRefresh={() => loadData(activeTripId!)} onNavigateToQuote={(id) => setView({ type: 'quote-detail', id, tripId: activeTripId! })} onCreateQuote={() => setView({ type: 'quote-edit', tripId: activeTripId! })} />;
       }
+
+      case 'vendor-profile-detail': {
+        return <VendorProfileDetailPage 
+          profileId={view.profileId} 
+          onBack={() => setView({ type: 'vendors' })} 
+          onRefresh={() => {}} 
+        />;
+      }
+
       case 'vendor-edit': {
         if (!trip) return null;
         const v = vendors.find(item => item.id === view.id);
