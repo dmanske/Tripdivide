@@ -266,13 +266,36 @@ const App: React.FC = () => {
             onSave={async (tripData) => {
               const newTrip = await supabaseDataProvider.saveTrip(tripData);
               
-              // Create default segment
-              await dataProvider.saveSegment({
-                tripId: newTrip.id,
-                name: 'Geral',
-                startDate: '',
-                endDate: ''
-              });
+              // Criar segmentos baseados nos destinos
+              if (tripData.destinations && tripData.destinations.length > 0) {
+                // Se tem múltiplos destinos, criar um segmento para cada
+                if (tripData.destinations.length > 1) {
+                  for (const destination of tripData.destinations) {
+                    await supabaseDataProvider.saveSegment({
+                      tripId: newTrip.id,
+                      name: destination,
+                      startDate: null,
+                      endDate: null
+                    });
+                  }
+                } else {
+                  // Se tem apenas 1 destino, criar segmento "Viagem Completa"
+                  await supabaseDataProvider.saveSegment({
+                    tripId: newTrip.id,
+                    name: 'Viagem Completa',
+                    startDate: tripData.startDate,
+                    endDate: tripData.endDate
+                  });
+                }
+              } else {
+                // Fallback: se não tem destinos, criar "Viagem Completa"
+                await supabaseDataProvider.saveSegment({
+                  tripId: newTrip.id,
+                  name: 'Viagem Completa',
+                  startDate: tripData.startDate,
+                  endDate: tripData.endDate
+                });
+              }
 
               setShowTripWizard(false);
               setShowLanding(false);
@@ -285,7 +308,14 @@ const App: React.FC = () => {
     );
   }
 
-  const navigateTo = (tab: string) => setView({ type: tab as any });
+  const navigateTo = (tab: string) => {
+    // Se estiver dentro de uma viagem, manter o tripId na navegação
+    if (activeTripId) {
+      setView({ type: tab as any, tripId: activeTripId });
+    } else {
+      setView({ type: tab as any });
+    }
+  };
 
   const renderContent = () => {
     switch (view.type) {
@@ -417,13 +447,36 @@ const App: React.FC = () => {
           onSave={async (tripData) => {
             const newTrip = await supabaseDataProvider.saveTrip(tripData);
             
-            // Create default segment
-            await dataProvider.saveSegment({
-              tripId: newTrip.id,
-              name: 'Geral',
-              startDate: '',
-              endDate: ''
-            });
+            // Criar segmentos baseados nos destinos
+            if (tripData.destinations && tripData.destinations.length > 0) {
+              // Se tem múltiplos destinos, criar um segmento para cada
+              if (tripData.destinations.length > 1) {
+                for (const destination of tripData.destinations) {
+                  await supabaseDataProvider.saveSegment({
+                    tripId: newTrip.id,
+                    name: destination,
+                    startDate: null,
+                    endDate: null
+                  });
+                }
+              } else {
+                // Se tem apenas 1 destino, criar segmento "Viagem Completa"
+                await supabaseDataProvider.saveSegment({
+                  tripId: newTrip.id,
+                  name: 'Viagem Completa',
+                  startDate: tripData.startDate,
+                  endDate: tripData.endDate
+                });
+              }
+            } else {
+              // Fallback: se não tem destinos, criar "Viagem Completa"
+              await supabaseDataProvider.saveSegment({
+                tripId: newTrip.id,
+                name: 'Viagem Completa',
+                startDate: tripData.startDate,
+                endDate: tripData.endDate
+              });
+            }
 
             setShowTripWizard(false);
             setShowLanding(false);

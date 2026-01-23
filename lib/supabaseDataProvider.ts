@@ -1662,22 +1662,29 @@ export const supabaseDataProvider = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Usuário não autenticado');
 
+    // Helper para converter string vazia em null para campos de data
+    const cleanDate = (date: any) => {
+      if (!date || date === '') return null;
+      return date;
+    };
+
     if (profile.id) {
       // Update
       const { data, error } = await supabase
         .from('td_traveler_profiles')
         .update({
-          full_name: profile.fullName,
-          nickname: profile.nickname,
-          phone: profile.phone,
-          email: profile.email,
-          birth_date: profile.birthDate,
-          can_drive: profile.canDrive,
-          primary_doc_type: profile.primaryDocType,
-          primary_doc_number: profile.primaryDocNumber,
-          primary_doc_expiry: profile.primaryDocExpiry,
-          notes: profile.notes,
-          tags: profile.tags,
+          full_name: profile.fullName || profile.full_name,
+          nickname: profile.nickname || null,
+          phone: profile.phone || null,
+          email: profile.email || null,
+          birth_date: cleanDate(profile.birthDate || profile.birth_date),
+          type: profile.type || 'Adulto',
+          can_drive: profile.canDrive !== undefined ? profile.canDrive : profile.can_drive,
+          primary_doc_type: profile.primaryDocType || profile.primary_doc_type || null,
+          primary_doc_number: profile.primaryDocNumber || profile.primary_doc_number || null,
+          primary_doc_expiry: cleanDate(profile.primaryDocExpiry || profile.primary_doc_expiry),
+          notes: profile.notes || null,
+          tags: profile.tags || [],
           updated_at: new Date().toISOString()
         })
         .eq('id', profile.id)
@@ -1692,16 +1699,17 @@ export const supabaseDataProvider = {
         .from('td_traveler_profiles')
         .insert({
           user_id: user.id,
-          full_name: profile.fullName,
-          nickname: profile.nickname,
-          phone: profile.phone,
-          email: profile.email,
-          birth_date: profile.birthDate,
-          can_drive: profile.canDrive,
-          primary_doc_type: profile.primaryDocType,
-          primary_doc_number: profile.primaryDocNumber,
-          primary_doc_expiry: profile.primaryDocExpiry,
-          notes: profile.notes,
+          full_name: profile.fullName || profile.full_name,
+          nickname: profile.nickname || null,
+          phone: profile.phone || null,
+          email: profile.email || null,
+          birth_date: cleanDate(profile.birthDate || profile.birth_date),
+          type: profile.type || 'Adulto',
+          can_drive: profile.canDrive !== undefined ? profile.canDrive : (profile.can_drive || false),
+          primary_doc_type: profile.primaryDocType || profile.primary_doc_type || null,
+          primary_doc_number: profile.primaryDocNumber || profile.primary_doc_number || null,
+          primary_doc_expiry: cleanDate(profile.primaryDocExpiry || profile.primary_doc_expiry),
+          notes: profile.notes || null,
           tags: profile.tags || []
         })
         .select()
@@ -2001,5 +2009,48 @@ export const supabaseDataProvider = {
       .eq('id', profileId);
 
     if (error) throw error;
+  },
+
+  // ==================== TRIP SETUP STATS ====================
+  getTripSetupStats: async (tripId: string) => {
+    // Contar viajantes vinculados
+    const { data: travelers, error: travelersError } = await supabase
+      .from('td_trip_travelers')
+      .select('id', { count: 'exact', head: true })
+      .eq('trip_id', tripId)
+      .eq('status', 'Ativo');
+
+    // Contar fornecedores vinculados
+    const { data: vendors, error: vendorsError } = await supabase
+      .from('td_trip_vendors')
+      .select('id', { count: 'exact', head: true })
+      .eq('trip_id', tripId)
+      .eq('status', 'Ativo');
+
+    // Contar cotações
+    const { data: quotes, error: quotesError } = await supabase
+      .from('td_quotes')
+      .select('id', { count: 'exact', head: true })
+      .eq('trip_id', tripId);
+
+    // Contar despesas
+    const { data: expenses, error: expensesError } = await supabase
+      .from('td_expenses')
+      .select('id', { count: 'exact', head: true })
+      .eq('trip_id', tripId);
+
+    // Contar pagamentos
+    const { data: payments, error: paymentsError } = await supabase
+      .from('td_payments')
+      .select('id', { count: 'exact', head: true })
+      .eq('trip_id', tripId);
+
+    return {
+      travelersCount: travelers?.length || 0,
+      vendorsCount: vendors?.length || 0,
+      quotesCount: quotes?.length || 0,
+      expensesCount: expenses?.length || 0,
+      paymentsCount: payments?.length || 0
+    };
   }
 };

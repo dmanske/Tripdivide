@@ -19,6 +19,7 @@ interface TravelerListProps {
 const TravelerList: React.FC<TravelerListProps> = ({ trip, onRefresh, onNavigateToDetail }) => {
   const [tripTravelers, setTripTravelers] = useState<any[]>([]);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [isFullWizardOpen, setIsFullWizardOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
@@ -139,8 +140,9 @@ const TravelerList: React.FC<TravelerListProps> = ({ trip, onRefresh, onNavigate
             <p className="text-gray-500">Gestão de participantes e documentos</p>
           </div>
           <div className="flex gap-2">
-             <Button variant="outline" onClick={() => setIsLinkModalOpen(true)}>+ Adicionar da minha lista</Button>
-             <Button variant="primary" onClick={() => setIsQuickCreateOpen(true)}>+ Criar Novo</Button>
+             <Button variant="outline" onClick={() => setIsLinkModalOpen(true)}>📋 Adicionar da Lista</Button>
+             <Button variant="outline" onClick={() => setIsQuickCreateOpen(true)}>⚡ Criar Rápido</Button>
+             <Button variant="primary" onClick={() => setIsFullWizardOpen(true)}>✨ Novo Completo</Button>
           </div>
         </header>
 
@@ -310,6 +312,24 @@ const TravelerList: React.FC<TravelerListProps> = ({ trip, onRefresh, onNavigate
           onClose={() => setIsQuickCreateOpen(false)}
           onCreated={handleQuickCreate}
         />
+      )}
+
+      {/* Modal de wizard completo */}
+      {isFullWizardOpen && (
+        <Modal isOpen={true} onClose={() => setIsFullWizardOpen(false)} title="Novo Viajante Completo" size="xl">
+          <TravelerWizard
+            tripId={trip.id}
+            trip={trip}
+            onDone={async (profileId) => {
+              await loadTripTravelers();
+              onRefresh();
+              setIsFullWizardOpen(false);
+              setSuccessMessage('Perfil criado com sucesso!');
+              setTimeout(() => setSuccessMessage(null), 3000);
+            }}
+            onCancel={() => setIsFullWizardOpen(false)}
+          />
+        </Modal>
       )}
     </div>
   );

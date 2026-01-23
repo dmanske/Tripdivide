@@ -75,6 +75,7 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
     phone: '',
     email: '',
     birthDate: '',
+    type: TravelerType.ADULT, // Tipo agora faz parte do perfil
     canDrive: false,
     tags: [],
     notes: ''
@@ -83,13 +84,16 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
   // Dados específicos da viagem (Step 2)
   const [tripData, setTripData] = useState<any>({
     type: TravelerType.ADULT,
-    coupleId: trip?.couples[0]?.id || '',
+    coupleId: trip?.couples?.[0]?.id || '',
     goesToSegments: trip?.segments
-      .filter(s => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s.id))
+      ?.filter(s => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s.id))
       .map(s => s.id) || [],
     isPayer: true,
     countInSplit: true
   });
+  
+  // Controle se deve vincular à viagem (quando tripId existe)
+  const [shouldLinkToTrip, setShouldLinkToTrip] = useState(true);
 
   // Carregar perfil e documentos se estiver editando
   useEffect(() => {
@@ -105,6 +109,7 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
               phone: profile.phone || '',
               email: profile.email || '',
               birthDate: profile.birth_date || '',
+              type: profile.type || TravelerType.ADULT, // Carregar tipo do perfil
               canDrive: profile.can_drive || false,
               tags: profile.tags || [],
               notes: profile.notes || ''
@@ -141,19 +146,25 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
 
   // Ajustar defaults baseado no tipo
   useEffect(() => {
-    if (tripData.type === TravelerType.INFANT || tripData.type === "Pet") {
+    if (profileData.type === TravelerType.INFANT || profileData.type === "Pet") {
       setTripData((prev: any) => ({ ...prev, isPayer: false, countInSplit: false }));
       setProfileData((prev: any) => ({ ...prev, canDrive: false }));
-    } else if (tripData.type === TravelerType.ADULT) {
+    } else if (profileData.type === TravelerType.ADULT) {
       setTripData((prev: any) => ({ ...prev, isPayer: true, countInSplit: true }));
     }
-  }, [tripData.type]);
+  }, [profileData.type]);
 
-  const steps = [
-    { id: 1, title: 'Básico' },
-    { id: 2, title: 'Participação' },
-    { id: 3, title: 'Documentos' }
-  ];
+  // Steps dinâmicos: se não tem trip, pula o step 2
+  const steps = tripId 
+    ? [
+        { id: 1, title: 'Básico' },
+        { id: 2, title: 'Participação' },
+        { id: 3, title: 'Documentos' }
+      ]
+    : [
+        { id: 1, title: 'Básico' },
+        { id: 3, title: 'Documentos' }
+      ];
 
   const handleNext = async () => {
     // Step 1 -> Step 2 (or 3 if no trip): Salvar perfil global
@@ -166,25 +177,30 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
           phone: profileData.phone,
           email: profileData.email,
           birth_date: profileData.birthDate,
+          type: profileData.type, // Salvar tipo no perfil
           can_drive: profileData.canDrive,
           tags: profileData.tags,
           notes: profileData.notes
         });
         if (saved?.id) setProfileId(saved.id);
         
-        // Se não tem trip, pula direto para step 3 (documentos)
-        if (!tripId) {
+        // Se não tem trip OU não quer vincular, pula direto para step 3 (documentos)
+        if (!tripId || !shouldLinkToTrip) {
           setStep(3);
           return;
         }
+        
+        // Se tem trip E quer vincular, vai para step 2
+        setStep(2);
+        return;
       } catch (error) {
         console.error('Erro ao salvar perfil:', error);
         return;
       }
     }
     
-    // Step 2 -> Step 3: Salvar vínculo se tripId existe
-    if (step === 2 && tripId && profileId) {
+    // Step 2 -> Step 3: Salvar vínculo se tripId existe E shouldLinkToTrip é true
+    if (step === 2 && tripId && profileId && shouldLinkToTrip) {
       try {
         if (tripTravelerId) {
           await supabaseDataProvider.updateTripTraveler(tripTravelerId, {
@@ -206,18 +222,23 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
           });
           if (link?.id) setTripTravelerId(link.id);
         }
+        
+        // Avança para step 3
+        setStep(3);
+        return;
       } catch (error) {
         console.error('Erro ao vincular:', error);
         return;
       }
     }
     
+    // Fallback: avança normalmente
     setStep(s => Math.min(s + 1, 3));
   };
   
   const handleBack = () => {
-    // Se está no step 3 e não tem trip, volta direto para step 1
-    if (step === 3 && !tripId) {
+    // Se está no step 3 e não tem trip OU não quer vincular, volta direto para step 1
+    if (step === 3 && (!tripId || !shouldLinkToTrip)) {
       setStep(1);
     } else {
       setStep(s => Math.max(s - 1, 1));
@@ -227,7 +248,7 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
   // Validação do Step 1
   const isStep1Valid = () => {
     if (!profileData.fullName || !profileData.fullName.trim()) return false;
-    if ((tripData.type === TravelerType.CHILD || tripData.type === TravelerType.INFANT) && !profileData.birthDate) return false;
+    if ((profileData.type === TravelerType.CHILD || profileData.type === TravelerType.INFANT) && !profileData.birthDate) return false;
     return true;
   };
 
@@ -264,10 +285,10 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
     <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-300">
       <div className="flex justify-between items-center relative pb-8">
         <div className="absolute top-4 left-0 w-full h-0.5 bg-gray-800 -z-10"></div>
-        {steps.map(s => (
+        {steps.map((s, index) => (
           <div key={s.id} className="flex flex-col items-center gap-2">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs border-2 transition-all ${step === s.id ? 'bg-indigo-600 border-indigo-400 text-white' : step > s.id ? 'bg-emerald-600 border-emerald-400 text-white' : 'bg-gray-900 border-gray-700 text-gray-500'}`}>
-              {step > s.id ? '✓' : s.id}
+              {step > s.id ? '✓' : index + 1}
             </div>
             <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">{s.title}</span>
           </div>
@@ -290,7 +311,7 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
                onChange={e => setProfileData({...profileData, nickname: e.target.value})} 
                placeholder="Opcional" 
              />
-             <Input as="select" label="Tipo *" value={tripData.type} onChange={e => setTripData({...tripData, type: e.target.value as any})}>
+             <Input as="select" label="Tipo *" value={profileData.type} onChange={e => setProfileData({...profileData, type: e.target.value as any})}>
                 {Object.values(TravelerType).map(t => <option key={t} value={t}>{t}</option>)}
              </Input>
              {trip && (
@@ -383,9 +404,9 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
              )}
              
              {/* Data de Nascimento - obrigatória para Criança/Bebê */}
-             {tripData.type !== "Pet" && (
+             {profileData.type !== "Pet" && (
                <Input 
-                 label={`Data de Nascimento ${(tripData.type === TravelerType.CHILD || tripData.type === TravelerType.INFANT) ? '*' : ''}`}
+                 label={`Data de Nascimento ${(profileData.type === TravelerType.CHILD || profileData.type === TravelerType.INFANT) ? '*' : ''}`}
                  type="date" 
                  value={dateToInput(profileData.birthDate)} 
                  onChange={e => setProfileData({...profileData, birthDate: e.target.value})} 
@@ -414,66 +435,91 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
         {/* STEP 2: PARTICIPAÇÃO */}
         {step === 2 && (
           <div className="space-y-6 animate-in fade-in duration-300">
-             <div>
-                <div className="flex justify-between items-center mb-2">
-                  <label className="block text-sm font-medium text-gray-400">Segmentos da Viagem</label>
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => setTripData({...tripData, goesToSegments: trip?.segments?.map(s => s.id) || []})}
-                      className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold uppercase"
-                    >
-                      Marcar todos
-                    </button>
-                    <span className="text-gray-700">•</span>
-                    <button 
-                      onClick={() => setTripData({...tripData, goesToSegments: []})}
-                      className="text-[10px] text-gray-500 hover:text-gray-400 font-bold uppercase"
-                    >
-                      Limpar
-                    </button>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                   {trip?.segments?.map(s => (
-                     <label key={s.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${tripData.goesToSegments?.includes(s.id) ? 'bg-indigo-600/10 border-indigo-500/40 text-white' : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-700'}`}>
-                        <input type="checkbox" className="w-4 h-4 accent-indigo-500" checked={tripData.goesToSegments?.includes(s.id)} onChange={e => {
-                          const ids = tripData.goesToSegments || [];
-                          const next = e.target.checked ? [...ids, s.id] : ids.filter(x => x !== s.id);
-                          setTripData({...tripData, goesToSegments: next});
-                        }} />
-                        <span className="text-sm font-bold">{s.name}</span>
-                     </label>
-                   ))}
-                </div>
-             </div>
-             
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 bg-gray-950 border border-gray-800 rounded-xl flex items-center justify-between">
-                   <div>
-                      <p className="text-sm font-bold">Viajante Pagante?</p>
-                      <p className="text-[10px] text-gray-600 uppercase">Considerar no racha de custos</p>
-                   </div>
+             {/* Opção de vincular à viagem */}
+             {tripId && (
+               <div className="p-4 bg-indigo-600/10 border border-indigo-500/30 rounded-xl">
+                 <label className="flex items-start gap-3 cursor-pointer">
                    <input 
                      type="checkbox" 
-                     className="w-6 h-6 accent-emerald-500" 
-                     checked={tripData.isPayer} 
-                     onChange={e => setTripData({...tripData, isPayer: e.target.checked})} 
-                     disabled={tripData.type === TravelerType.INFANT || tripData.type === "Pet"}
+                     className="w-5 h-5 mt-0.5 accent-indigo-500" 
+                     checked={shouldLinkToTrip} 
+                     onChange={e => setShouldLinkToTrip(e.target.checked)} 
                    />
-                </div>
-                
-                {tripData.type === TravelerType.ADULT && (
-                  <div className="p-4 bg-gray-950 border border-gray-800 rounded-xl flex items-center justify-between">
-                     <div>
-                        <p className="text-sm font-bold">Pode Dirigir?</p>
-                        <p className="text-[10px] text-gray-600 uppercase">CNH Habilitada</p>
-                     </div>
-                     <input type="checkbox" className="w-6 h-6 accent-indigo-500" checked={profileData.canDrive} onChange={e => setProfileData({...profileData, canDrive: e.target.checked})} />
-                  </div>
-                )}
-             </div>
+                   <div>
+                     <p className="text-sm font-bold text-white">Vincular a esta viagem agora</p>
+                     <p className="text-xs text-gray-400 mt-1">
+                       Se desmarcar, o perfil será criado mas não vinculado. Você pode vincular depois pela opção "Adicionar da Lista".
+                     </p>
+                   </div>
+                 </label>
+               </div>
+             )}
+
+             {/* Campos de participação - só aparecem se shouldLinkToTrip */}
+             {shouldLinkToTrip && (
+               <>
+                 <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="block text-sm font-medium text-gray-400">Segmentos da Viagem</label>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => setTripData({...tripData, goesToSegments: trip?.segments?.map(s => s.id) || []})}
+                          className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold uppercase"
+                        >
+                          Marcar todos
+                        </button>
+                        <span className="text-gray-700">•</span>
+                        <button 
+                          onClick={() => setTripData({...tripData, goesToSegments: []})}
+                          className="text-[10px] text-gray-500 hover:text-gray-400 font-bold uppercase"
+                        >
+                          Limpar
+                        </button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                       {trip?.segments?.map(s => (
+                         <label key={s.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${tripData.goesToSegments?.includes(s.id) ? 'bg-indigo-600/10 border-indigo-500/40 text-white' : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-700'}`}>
+                            <input type="checkbox" className="w-4 h-4 accent-indigo-500" checked={tripData.goesToSegments?.includes(s.id)} onChange={e => {
+                              const ids = tripData.goesToSegments || [];
+                              const next = e.target.checked ? [...ids, s.id] : ids.filter(x => x !== s.id);
+                              setTripData({...tripData, goesToSegments: next});
+                            }} />
+                            <span className="text-sm font-bold">{s.name}</span>
+                         </label>
+                       ))}
+                    </div>
+                 </div>
+                 
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-4 bg-gray-950 border border-gray-800 rounded-xl flex items-center justify-between">
+                       <div>
+                          <p className="text-sm font-bold">Viajante Pagante?</p>
+                          <p className="text-[10px] text-gray-600 uppercase">Considerar no racha de custos</p>
+                       </div>
+                       <input 
+                         type="checkbox" 
+                         className="w-6 h-6 accent-emerald-500" 
+                         checked={tripData.isPayer} 
+                         onChange={e => setTripData({...tripData, isPayer: e.target.checked})} 
+                         disabled={profileData.type === TravelerType.INFANT || profileData.type === "Pet"}
+                       />
+                    </div>
+                    
+                    {profileData.type === TravelerType.ADULT && (
+                      <div className="p-4 bg-gray-950 border border-gray-800 rounded-xl flex items-center justify-between">
+                         <div>
+                            <p className="text-sm font-bold">Pode Dirigir?</p>
+                            <p className="text-[10px] text-gray-600 uppercase">CNH Habilitada</p>
+                         </div>
+                         <input type="checkbox" className="w-6 h-6 accent-indigo-500" checked={profileData.canDrive} onChange={e => setProfileData({...profileData, canDrive: e.target.checked})} />
+                      </div>
+                    )}
+                 </div>
+               </>
+             )}
              
-             {/* Tags estruturadas */}
+             {/* Tags e observações - sempre aparecem */}
              <div>
                <label className="block text-sm font-medium text-gray-400 mb-2">Tags</label>
                <div className="flex flex-wrap gap-2 mb-2">

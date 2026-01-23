@@ -80,6 +80,9 @@ const EditTripTravelerModal: React.FC<EditTripTravelerModalProps> = ({
           <p className="text-sm text-gray-500 mt-1">
             Ajuste como <strong>{profile?.full_name}</strong> participa de <strong>{trip.name}</strong>
           </p>
+          <p className="text-xs text-amber-500 mt-2">
+            💡 Para editar dados pessoais ou documentos, clique em "Ver Perfil" na lista
+          </p>
         </div>
 
         {/* Perfil Info */}
