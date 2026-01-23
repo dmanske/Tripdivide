@@ -345,11 +345,60 @@ const QuoteWizard: React.FC<QuoteWizardProps> = ({ trip, initialData, onSave, on
              </div>
            )}
            {formData.category === 'Aluguel de Carro' && (
-              <div className="grid grid-cols-2 gap-4">
-                <Input label="Retirada" type="datetime-local" value={formData.carDetails?.pickupDateTime} onChange={e => setFormData({...formData, carDetails: {...formData.carDetails!, pickupDateTime: e.target.value}})} />
-                <Input label="Devolução" type="datetime-local" value={formData.carDetails?.dropoffDateTime} onChange={e => setFormData({...formData, carDetails: {...formData.carDetails!, dropoffDateTime: e.target.value}})} />
-                <Input label="Classe do Carro" value={formData.carDetails?.carClass} onChange={e => setFormData({...formData, carDetails: {...formData.carDetails!, carClass: e.target.value}})} />
-                <Input label="Franquia (Deductible)" type="number" value={formData.carDetails?.deductible} onChange={e => setFormData({...formData, carDetails: {...formData.carDetails!, deductible: Number(e.target.value)}})} />
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Input 
+                      label="📅 Data/Hora de Retirada" 
+                      type="datetime-local" 
+                      value={formData.carDetails?.pickupDateTime} 
+                      onChange={e => setFormData({...formData, carDetails: {...formData.carDetails!, pickupDateTime: e.target.value}})} 
+                    />
+                  </div>
+                  <div>
+                    <Input 
+                      label="📅 Data/Hora de Devolução" 
+                      type="datetime-local" 
+                      value={formData.carDetails?.dropoffDateTime} 
+                      onChange={e => setFormData({...formData, carDetails: {...formData.carDetails!, dropoffDateTime: e.target.value}})} 
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Input 
+                      label="📍 Local de Retirada" 
+                      placeholder="Ex: Aeroporto de Orlando"
+                      value={formData.carDetails?.pickupLocation || ''} 
+                      onChange={e => setFormData({...formData, carDetails: {...formData.carDetails!, pickupLocation: e.target.value}})} 
+                    />
+                  </div>
+                  <div>
+                    <Input 
+                      label="📍 Local de Devolução" 
+                      placeholder="Ex: Aeroporto de Miami"
+                      value={formData.carDetails?.dropoffLocation || ''} 
+                      onChange={e => setFormData({...formData, carDetails: {...formData.carDetails!, dropoffLocation: e.target.value}})} 
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <Input 
+                    label="🚗 Classe do Veículo" 
+                    placeholder="Ex: SUV, Sedan, Compacto"
+                    value={formData.carDetails?.carClass} 
+                    onChange={e => setFormData({...formData, carDetails: {...formData.carDetails!, carClass: e.target.value}})} 
+                  />
+                  <Input 
+                    label="💰 Franquia (Deductible)" 
+                    type="number" 
+                    placeholder="0"
+                    value={formData.carDetails?.deductible} 
+                    onChange={e => setFormData({...formData, carDetails: {...formData.carDetails!, deductible: Number(e.target.value)}})} 
+                  />
+                </div>
               </div>
            )}
            {!['Hospedagem', 'Ingressos/Atrações', 'Aluguel de Carro'].includes(formData.category || '') && (

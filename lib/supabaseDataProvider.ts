@@ -1012,6 +1012,7 @@ export const supabaseDataProvider = {
           car_details: quote.carDetails,
           generic_details: quote.genericDetails,
           taxes_fees: quote.taxesFees,
+          details_json: quote.details_json || null,
           updated_at: new Date().toISOString()
         })
         .eq('id', quote.id)
@@ -1054,6 +1055,7 @@ export const supabaseDataProvider = {
           car_details: quote.carDetails,
           generic_details: quote.genericDetails,
           taxes_fees: quote.taxesFees,
+          details_json: quote.details_json || null,
           created_by: user?.id
         })
         .select()

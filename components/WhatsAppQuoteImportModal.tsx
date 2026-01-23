@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Trip, Quote } from '../types';
 import { Modal, Button, Input, Badge, Card } from './CommonUI';
 import { parseWhatsAppQuotes, ParsedQuoteBlock } from '../lib/whatsapp/parseWhatsAppQuotes';
+import { parseQuoteText } from '../lib/whatsapp/universalQuoteParser';
 import { supabaseDataProvider } from '../lib/supabaseDataProvider';
 import { formatCurrency } from '../lib/formatters';
 
@@ -73,14 +74,20 @@ const WhatsAppQuoteImportModal: React.FC<WhatsAppQuoteImportModalProps> = ({ tri
       const quotesToImport = parsedQuotes.filter(q => selectedQuotes.has(q.id));
       
       for (const quote of quotesToImport) {
+        // Usar parser universal para extrair details_json
+        const parsed = parseQuoteText(quote.rawText, quote.category as any);
+        
         const quoteData: Partial<Quote> = {
-          ...quote.suggestedQuote,
+          ...quote.suggestedQuote, // Já inclui provider, participantIds, attachments
           tripId: trip.id,
-          segmentId: trip.segments[0]?.id || null, // Usar primeiro segmento real ou null
-          participantIds: ['ALL'],
+          segmentId: trip.segments[0]?.id || null,
           vendor_profile_id: matchedVendor?.id,
           source_type: matchedVendor ? undefined : 'texto',
-          source_value: matchedVendor ? undefined : quote.rawText
+          source_value: matchedVendor ? undefined : quote.rawText,
+          // Garantir que provider está presente (fallback se não vier do suggestedQuote)
+          provider: quote.suggestedQuote.provider || quote.vendorName || 'Fornecedor Desconhecido',
+          // Adicionar details_json do parser universal
+          details_json: parsed.details_json
         };
 
         await supabaseDataProvider.saveQuote(quoteData as Quote);

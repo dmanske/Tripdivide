@@ -9,6 +9,7 @@ import WhatsAppImportModal from './WhatsAppImportModal';
 import WhatsAppQuoteImportModal from './WhatsAppQuoteImportModal';
 import LinkQuoteImportModal from './LinkQuoteImportModal';
 import { ParsedQuoteBlock } from '../lib/whatsapp/parseWhatsAppQuotes';
+import { getQuoteSummary } from '../lib/whatsapp/universalQuoteParser';
 
 interface QuoteListProps {
   trip: Trip;
@@ -46,8 +47,11 @@ const QuoteList: React.FC<QuoteListProps> = ({ trip, vendors, quotes, onRefresh,
   };
 
   const filteredQuotes = quotes.filter(q => {
-    return (filters.category === 'all' || q.category === filters.category) &&
-           (filters.status === 'all' || q.status === (filters.status as any));
+    const categoryMatch = filters.category === 'all' || q.category === filters.category;
+    const statusMatch = filters.status === 'all' || q.status === (filters.status as any);
+    const vendorMatch = filters.vendor === 'all' || q.vendor_profile_id === filters.vendor || q.provider === filters.vendor;
+    
+    return categoryMatch && statusMatch && vendorMatch;
   });
 
   const handleImportFinalize = async (blocks: ParsedQuoteBlock[]) => {
@@ -290,9 +294,26 @@ const QuoteList: React.FC<QuoteListProps> = ({ trip, vendors, quotes, onRefresh,
                       </Badge>
                     )}
                   </div>
-                  <Badge color={quote.status === QuoteStatus.CHOSEN ? 'green' : quote.status === QuoteStatus.SHORTLIST ? 'amber' : 'gray'} className="text-[9px]">
-                    {quote.status}
-                  </Badge>
+                  
+                  {/* Mostrar grupos participantes ou status */}
+                  <div className="flex items-center gap-1 flex-wrap justify-end">
+                    {quote.participantIds && quote.participantIds.length > 0 && !quote.participantIds.includes('ALL') ? (
+                      // Mostrar nomes dos grupos
+                      quote.participantIds.map(coupleId => {
+                        const couple = trip.couples.find(c => c.id === coupleId);
+                        return couple ? (
+                          <Badge key={coupleId} color="purple" className="text-[9px]">
+                            {couple.name}
+                          </Badge>
+                        ) : null;
+                      })
+                    ) : (
+                      // Mostrar status se não houver grupos específicos
+                      <Badge color={quote.status === QuoteStatus.CHOSEN ? 'green' : quote.status === QuoteStatus.SHORTLIST ? 'amber' : 'gray'} className="text-[9px]">
+                        {quote.status}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
 
                 {/* Área clicável principal */}
@@ -356,6 +377,13 @@ const QuoteList: React.FC<QuoteListProps> = ({ trip, vendors, quotes, onRefresh,
 
                   {/* Informações extras */}
                   <div className="flex items-center justify-between text-xs">
+                    {/* Micro-resumo estruturado se tiver details_json */}
+                    {quote.details_json && (
+                      <div className="flex items-center gap-1 text-indigo-400 font-bold">
+                        <span>📊</span>
+                        <span>{getQuoteSummary(quote.category as any, quote.details_json)}</span>
+                      </div>
+                    )}
                     {quote.validUntil && (
                       <div className="flex items-center gap-1 text-gray-600">
                         <span>⏰</span>

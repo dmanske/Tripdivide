@@ -470,7 +470,59 @@ const QuoteDetailView: React.FC<QuoteDetailViewProps> = ({
         {/* ABA DADOS TÉCNICOS */}
         {activeTab === 'details' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in duration-300">
-            {/* A. Informações do Orçamento */}
+            {/* 1. Detalhes do Carro - PRIMEIRO CARD */}
+            {quote.carDetails && (
+              <Card title="🚗 Detalhes do Carro" className="lg:col-span-2">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {quote.carDetails.pickupDateTime && (
+                    <div>
+                      <p className="text-[10px] font-black text-gray-500 uppercase">Retirada</p>
+                      <p className="text-sm text-white font-bold">{new Date(quote.carDetails.pickupDateTime).toLocaleString('pt-BR')}</p>
+                      {quote.carDetails.pickupLocation && (
+                        <p className="text-xs text-gray-500 mt-1">📍 {quote.carDetails.pickupLocation}</p>
+                      )}
+                    </div>
+                  )}
+                  {quote.carDetails.dropoffDateTime && (
+                    <div>
+                      <p className="text-[10px] font-black text-gray-500 uppercase">Devolução</p>
+                      <p className="text-sm text-white font-bold">{new Date(quote.carDetails.dropoffDateTime).toLocaleString('pt-BR')}</p>
+                      {quote.carDetails.dropoffLocation && (
+                        <p className="text-xs text-gray-500 mt-1">📍 {quote.carDetails.dropoffLocation}</p>
+                      )}
+                    </div>
+                  )}
+                  {quote.carDetails.carClass && (
+                    <div>
+                      <p className="text-[10px] font-black text-gray-500 uppercase">Classe do Veículo</p>
+                      <p className="text-sm text-white font-bold">{quote.carDetails.carClass}</p>
+                    </div>
+                  )}
+                  {quote.carDetails.deductible !== undefined && (
+                    <div>
+                      <p className="text-[10px] font-black text-gray-500 uppercase">Franquia</p>
+                      <p className="text-sm text-white font-bold">{formatCurrency(quote.carDetails.deductible)}</p>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Alerta se locais diferentes */}
+                {quote.carDetails.pickupLocation && quote.carDetails.dropoffLocation && 
+                 quote.carDetails.pickupLocation !== quote.carDetails.dropoffLocation && (
+                  <div className="mt-4 p-3 bg-amber-600/10 border border-amber-500/30 rounded-lg flex items-start gap-2">
+                    <span className="text-lg">⚠️</span>
+                    <div>
+                      <p className="text-sm text-amber-400 font-bold">Devolução em local diferente</p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Retirada: {quote.carDetails.pickupLocation} → Devolução: {quote.carDetails.dropoffLocation}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </Card>
+            )}
+
+            {/* 2. Informações do Orçamento */}
             <Card title="Informações do Orçamento">
               <div className="space-y-3">
                 <div>
@@ -518,7 +570,7 @@ const QuoteDetailView: React.FC<QuoteDetailViewProps> = ({
               </div>
             </Card>
 
-            {/* B. Fornecedor */}
+            {/* B. Fornecedor - AGORA AO LADO */}
             <Card title="Fornecedor">
               <div className="space-y-3">
                 <div>
@@ -600,7 +652,6 @@ const QuoteDetailView: React.FC<QuoteDetailViewProps> = ({
               <p className="text-sm text-gray-400 whitespace-pre-wrap">{quote.cancellationPolicy || 'Não informada'}</p>
             </Card>
 
-            {/* Detalhes específicos por categoria */}
             {quote.hotelDetails && (
               <Card title="Detalhes do Hotel" className="lg:col-span-2">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -650,37 +701,6 @@ const QuoteDetailView: React.FC<QuoteDetailViewProps> = ({
                           <Badge key={i} color="gray" className="text-[9px]">{a.trim()}</Badge>
                         ))}
                       </div>
-                    </div>
-                  )}
-                </div>
-              </Card>
-            )}
-
-            {quote.carDetails && (
-              <Card title="Detalhes do Carro" className="lg:col-span-2">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {quote.carDetails.pickupDateTime && (
-                    <div>
-                      <p className="text-[10px] font-black text-gray-500 uppercase">Retirada</p>
-                      <p className="text-sm text-white">{new Date(quote.carDetails.pickupDateTime).toLocaleString('pt-BR')}</p>
-                    </div>
-                  )}
-                  {quote.carDetails.dropoffDateTime && (
-                    <div>
-                      <p className="text-[10px] font-black text-gray-500 uppercase">Devolução</p>
-                      <p className="text-sm text-white">{new Date(quote.carDetails.dropoffDateTime).toLocaleString('pt-BR')}</p>
-                    </div>
-                  )}
-                  {quote.carDetails.carClass && (
-                    <div>
-                      <p className="text-[10px] font-black text-gray-500 uppercase">Classe</p>
-                      <p className="text-sm text-white">{quote.carDetails.carClass}</p>
-                    </div>
-                  )}
-                  {quote.carDetails.deductible !== undefined && (
-                    <div>
-                      <p className="text-[10px] font-black text-gray-500 uppercase">Franquia</p>
-                      <p className="text-sm text-white">{formatCurrency(quote.carDetails.deductible)}</p>
                     </div>
                   )}
                 </div>

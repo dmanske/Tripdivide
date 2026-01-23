@@ -139,6 +139,7 @@ export interface Expense {
   ticketDetails?: any;
   carDetails?: any;
   genericDetails?: any;
+  details_json?: any; // Dados estruturados copiados do quote
 }
 
 export interface Vendor {
@@ -283,6 +284,7 @@ export interface Quote {
   carDetails?: any;
   genericDetails?: any;
   taxesFees?: number;
+  details_json?: any; // Dados estruturados por categoria (FlightDetails, LodgingDetails, etc)
 }
 
 export interface Comparison {
@@ -320,6 +322,8 @@ export interface QuoteHotelDetails {
 export interface QuoteCarDetails {
   pickupDateTime: string;
   dropoffDateTime: string;
+  pickupLocation?: string;
+  dropoffLocation?: string;
   carClass: string;
   deductible: number;
 }
