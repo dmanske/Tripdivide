@@ -1961,6 +1961,8 @@ export const supabaseDataProvider = {
   },
 
   saveVendorProfile: async (profile: any) => {
+    console.log('🔍 saveVendorProfile chamado:', { id: profile.id, name: profile.name });
+    
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Usuário não autenticado');
 
@@ -1981,6 +1983,7 @@ export const supabaseDataProvider = {
     };
 
     if (profile.id) {
+      console.log('📝 Atualizando perfil existente:', profile.id);
       const { data, error } = await supabase
         .from('td_vendor_profiles')
         .update(profileData)
@@ -1989,8 +1992,10 @@ export const supabaseDataProvider = {
         .single();
 
       if (error) throw error;
+      console.log('✅ Perfil atualizado:', data.id);
       return data;
     } else {
+      console.log('➕ Criando novo perfil');
       const { data, error } = await supabase
         .from('td_vendor_profiles')
         .insert({ ...profileData, created_at: new Date().toISOString() })
@@ -1998,6 +2003,7 @@ export const supabaseDataProvider = {
         .single();
 
       if (error) throw error;
+      console.log('✅ Perfil criado:', data.id);
       return data;
     }
   },
@@ -2052,5 +2058,66 @@ export const supabaseDataProvider = {
       expensesCount: expensesCount || 0,
       paymentsCount: paymentsCount || 0
     };
+  },
+
+  // ==================== VÍNCULOS - FORNECEDORES X VIAGEM ====================
+  getTripVendors: async (tripId: string) => {
+    const { data, error } = await supabase
+      .from('td_trip_vendors')
+      .select(`
+        *,
+        profile:td_vendor_profiles(*)
+      `)
+      .eq('trip_id', tripId)
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  linkVendorToTrip: async (tripId: string, profileId: string, options: any = {}) => {
+    console.log('🔗 linkVendorToTrip chamado:', { tripId, profileId, options });
+    
+    const { data, error } = await supabase
+      .from('td_trip_vendors')
+      .insert({
+        trip_id: tripId,
+        vendor_profile_id: profileId,
+        preferred: options.preferred || false,
+        custom_rating: options.customRating,
+        custom_notes: options.customNotes
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    console.log('✅ Fornecedor vinculado:', data.id);
+    return data;
+  },
+
+  unlinkVendorFromTrip: async (tripVendorId: string) => {
+    const { error } = await supabase
+      .from('td_trip_vendors')
+      .delete()
+      .eq('id', tripVendorId);
+
+    if (error) throw error;
+  },
+
+  updateTripVendor: async (tripVendorId: string, updates: any) => {
+    const { data, error } = await supabase
+      .from('td_trip_vendors')
+      .update({
+        preferred: updates.preferred,
+        custom_rating: updates.customRating,
+        custom_notes: updates.customNotes,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', tripVendorId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
   }
 };

@@ -272,3 +272,199 @@ CHECK (rating >= 0 AND rating <= 5);
 - ✅ UI moderna com mensagens inline
 - ✅ TypeScript sem erros
 - ✅ Build limpo
+
+
+---
+
+## 📊 Sistema de Comparação Inteligente de Orçamentos
+
+### Problema Identificado
+
+O usuário precisa comparar orçamentos em **3 cenários diferentes**:
+1. **Mesmo produto** (ex: 3 fornecedores, mesmo ingresso Disney 4 dias)
+2. **Mesmo serviço, configurações diferentes** (ex: ingressos com/sem water parks)
+3. **Produtos completamente diferentes** (ex: casas com tamanhos e localizações variadas)
+
+### Solução Implementada
+
+**Arquivo modificado**: `components/ComparisonPage.tsx`
+
+#### 1. Múltiplos Modos de Ordenação
+
+```tsx
+const [sortBy, setSortBy] = useState<'price' | 'pricePerPerson' | 'pricePerDay'>('price');
+```
+
+**3 opções de ordenação:**
+- **Preço Total**: Comparação direta (produtos idênticos)
+- **Por Pessoa**: Divide pelo número de viajantes (6 pessoas)
+- **Por Dia**: Normaliza por duração (detecta "4 dias", "10 noites" automaticamente)
+
+#### 2. Cards de Resumo Rápido
+
+```
+┌─────────────────┬─────────────────┬─────────────────┐
+│ 💰 Melhor Preço │ 📊 Diferença    │ 🔍 Comparando   │
+│ R$ 12.000       │ R$ 6.000        │ 3 opções        │
+└─────────────────┴─────────────────┴─────────────────┘
+```
+
+- Mostra o menor preço entre as opções
+- Calcula economia potencial (diferença máx - mín)
+- Indica quantas opções estão sendo comparadas
+
+#### 3. Notas de Comparação Inline
+
+```tsx
+<textarea
+  value={comparisonNotes[q.id] || ''}
+  onChange={e => setComparisonNotes({...comparisonNotes, [q.id]: e.target.value})}
+  placeholder="Adicione observações sobre este orçamento..."
+/>
+```
+
+- Campo editável para cada orçamento
+- Permite anotar prós/contras
+- Essencial para decisões subjetivas
+
+#### 4. Seções Específicas por Categoria
+
+**Hospedagem:**
+- Café da manhã (incluso/não)
+- Tipo de quarto
+- Número de quartos
+- Localização
+- Comodidades (badges: piscina, churrasqueira, etc)
+
+**Ingressos/Atrações:**
+- Parque (🏰 Disney, 🎬 Universal, 🐋 SeaWorld, 🧱 Legoland)
+- Dias de ingresso (extraído automaticamente)
+- Park Hopper (detecta pela palavra-chave)
+
+**Aluguel de Carro:**
+- Modelo do veículo (regex para Toyota, Honda, etc)
+- Dias de locação
+- Preço por dia (calculado: total / dias)
+
+#### 5. Detecção Automática
+
+```tsx
+const extractDays = (quote: Quote): number | null => {
+  const text = `${quote.title} ${quote.notesInternal || ''}`.toLowerCase();
+  const match = text.match(/(\d+)\s*(dia|day|noite|night)/i);
+  return match ? parseInt(match[1]) : null;
+};
+```
+
+- Extrai número de dias de títulos e notas
+- Identifica parques por palavras-chave
+- Detecta modelos de carro
+- Calcula métricas normalizadas automaticamente
+
+### Cenários de Uso
+
+#### Cenário 1: Mesmo Produto (Comparação Direta)
+
+**Exemplo**: 3 orçamentos de "Disney 4 dias Park Hopper"
+
+```
+João:  R$ 2.500 (4 dias hopper)
+Maria: R$ 2.300 (4 dias hopper) ✅ MELHOR
+Pedro: R$ 2.450 (4 dias hopper)
+```
+
+**Fluxo:**
+1. Selecionar os 3 orçamentos
+2. Ordenar por "Preço Total"
+3. Escolher o mais barato
+4. Decisão objetiva e rápida
+
+#### Cenário 2: Configurações Diferentes
+
+**Exemplo**: Ingressos Disney com opções variadas
+
+```
+João:  R$ 2.500 (4 dias + water parks) → R$ 625/dia
+Maria: R$ 2.000 (4 dias sem water)     → R$ 500/dia ✅
+Pedro: R$ 2.300 (3 dias + 1 water)     → R$ 575/dia
+```
+
+**Fluxo:**
+1. Ordenar por "Por Dia"
+2. Ver custo normalizado
+3. Usar notas para destacar diferenças:
+   - "João: Inclui Blizzard Beach + Typhoon Lagoon"
+   - "Maria: Só parques principais"
+4. Decidir baseado no que está incluído
+
+#### Cenário 3: Produtos Completamente Diferentes
+
+**Exemplo**: Casas com tamanhos e localizações variadas
+
+```
+Casa A: R$ 15.000
+├─ 5 quartos, piscina
+├─ 10 min Disney
+└─ R$ 1.500/dia | R$ 3.000/quarto
+
+Casa B: R$ 12.000 ✅ MAIS BARATA
+├─ 4 quartos, sem piscina
+├─ 30 min Disney
+└─ R$ 1.200/dia | R$ 3.000/quarto
+
+Casa C: R$ 18.000
+├─ 6 quartos, piscina + jacuzzi
+├─ 5 min Disney
+└─ R$ 1.800/dia | R$ 3.000/quarto
+```
+
+**Fluxo:**
+1. Usar múltiplas ordenações
+2. Notas extensivas com prós/contras:
+   ```
+   Casa A:
+   ✅ Melhor custo/quarto
+   ✅ Piscina incluída
+   ❌ Só 5 quartos (apertado)
+   
+   Casa B:
+   ✅ Mais barata
+   ❌ Sem piscina, longe
+   
+   Casa C:
+   ✅ Mais espaçosa, perto
+   ❌ Mais cara
+   ```
+3. Votar com os casais
+4. Decisão baseada em prioridades
+
+### Melhorias de UX
+
+✅ **Sem `alert()`**: Mensagens inline com timeout
+✅ **Filtro inteligente**: "Apenas Diferenças" oculta linhas iguais
+✅ **Responsivo**: Tabela com scroll horizontal
+✅ **Visual claro**: Linhas com diferenças têm indicador 🔵
+✅ **Sticky columns**: Primeira coluna fixa ao rolar
+
+### Documentação Criada
+
+**Arquivo**: `GUIA_COMPARACAO_ORCAMENTOS.md`
+
+Conteúdo:
+- Explicação detalhada dos 3 cenários
+- Como usar cada modo de ordenação
+- Dicas práticas por categoria (ingressos, casas, carros)
+- Exemplos reais passo a passo
+- FAQ completo
+- Tabela de quando usar cada ordenação
+
+### Benefícios
+
+✅ **Flexibilidade**: Suporta desde comparações simples até complexas
+✅ **Normalização**: Compara "maçãs com maçãs" mesmo com durações diferentes
+✅ **Contexto**: Notas inline permitem decisões informadas
+✅ **Automação**: Detecta e calcula métricas automaticamente
+✅ **Clareza**: Cards de resumo mostram economia potencial
+✅ **Decisão informada**: Seções específicas por categoria destacam diferenças importantes
+
+---

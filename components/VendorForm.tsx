@@ -121,7 +121,15 @@ const VendorForm: React.FC<VendorFormProps> = ({ trip, initialData, onSave, onCa
           <div className="space-y-6 animate-in fade-in duration-300">
              <div className="flex justify-between items-center">
                 <p className="text-[10px] font-black text-gray-500 uppercase">Equipe de Atendimento</p>
-                <Button variant="outline" className="text-[10px] py-1" onClick={() => updateContact({ id: '', name: '', role: 'Comercial', preferredMethod: 'WhatsApp', isPrimary: false })}>
+                <Button variant="outline" className="text-[10px] py-1" onClick={() => updateContact({ 
+                  id: '', 
+                  name: '', 
+                  role: 'Comercial', 
+                  phone: '',
+                  email: '',
+                  preferredMethod: 'WhatsApp', 
+                  isPrimary: (formData.contacts || []).length === 0 
+                })}>
                   + Novo Contato
                 </Button>
              </div>
@@ -130,39 +138,130 @@ const VendorForm: React.FC<VendorFormProps> = ({ trip, initialData, onSave, onCa
                {(formData.contacts || []).map(contact => (
                  <div key={contact.id} className="p-4 bg-gray-900 border border-gray-800 rounded-2xl space-y-4">
                     <div className="flex justify-between items-start">
-                       <div className="flex-1 grid grid-cols-2 gap-3">
-                          <Input label="Nome" value={contact.name} onChange={e => updateContact({...contact, name: e.target.value})} />
-                          <Input label="Cargo/Setor" value={contact.role} onChange={e => updateContact({...contact, role: e.target.value})} />
-                          <div>
-                            <label className="block text-sm font-medium text-gray-400 mb-2">WhatsApp/Fone</label>
-                            <PhoneInput 
-                              value={contact.phone || ''} 
-                              onChange={phone => updateContact({...contact, phone})} 
-                              placeholder="(00) 00000-0000"
-                              className="w-full px-4 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
-                            />
+                       <div className="flex-1 space-y-4">
+                          {/* Nome e Cargo */}
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-bold text-gray-400 mb-1">Nome *</label>
+                              <input
+                                type="text"
+                                value={contact.name}
+                                onChange={e => updateContact({...contact, name: e.target.value})}
+                                placeholder="Ex: João Silva"
+                                className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-bold text-gray-400 mb-1">Cargo/Setor *</label>
+                              <input
+                                type="text"
+                                value={contact.role}
+                                onChange={e => updateContact({...contact, role: e.target.value})}
+                                placeholder="Ex: Comercial, Vendas"
+                                className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors text-sm"
+                              />
+                            </div>
                           </div>
-                          <Input label="Email" value={contact.email} onChange={e => updateContact({...contact, email: e.target.value})} />
+
+                          {/* WhatsApp e Email */}
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-bold text-gray-400 mb-1">
+                                <span className="flex items-center gap-1">
+                                  💬 WhatsApp/Telefone
+                                  {contact.preferredMethod === 'WhatsApp' && <Badge color="green" className="text-[8px]">Preferido</Badge>}
+                                </span>
+                              </label>
+                              <PhoneInput 
+                                value={contact.phone || ''} 
+                                onChange={phone => updateContact({...contact, phone})} 
+                                placeholder="(00) 00000-0000"
+                                className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-bold text-gray-400 mb-1">
+                                <span className="flex items-center gap-1">
+                                  ✉️ Email
+                                  {contact.preferredMethod === 'Email' && <Badge color="blue" className="text-[8px]">Preferido</Badge>}
+                                </span>
+                              </label>
+                              <input
+                                type="email"
+                                value={contact.email || ''}
+                                onChange={e => updateContact({...contact, email: e.target.value})}
+                                placeholder="contato@empresa.com"
+                                className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors text-sm"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Opções */}
+                          <div className="flex items-center gap-4 pt-2 border-t border-gray-800">
+                            <label className="flex items-center gap-2 text-xs font-medium text-gray-500 cursor-pointer">
+                              <input 
+                                type="checkbox" 
+                                checked={contact.isPrimary} 
+                                onChange={e => {
+                                  // Se marcar como principal, desmarcar outros
+                                  if (e.target.checked) {
+                                    const updatedContacts = (formData.contacts || []).map(c => ({
+                                      ...c,
+                                      isPrimary: c.id === contact.id
+                                    }));
+                                    setFormData({...formData, contacts: updatedContacts});
+                                  } else {
+                                    updateContact({...contact, isPrimary: false});
+                                  }
+                                }}
+                                className="accent-indigo-500" 
+                              />
+                              ⭐ Contato Principal
+                            </label>
+                            <div className="flex gap-2">
+                              <span className="text-xs text-gray-600">Método preferido:</span>
+                              {['WhatsApp', 'Email', 'Telefone'].map(m => (
+                                <button 
+                                  key={m} 
+                                  type="button"
+                                  onClick={() => updateContact({...contact, preferredMethod: m as any})} 
+                                  className={`px-2 py-1 rounded text-[9px] font-black uppercase border transition-all ${contact.preferredMethod === m ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-gray-950 border-gray-800 text-gray-600 hover:border-gray-700'}`}
+                                >
+                                  {m}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                        </div>
-                       <button onClick={() => removeContact(contact.id)} className="ml-4 text-red-500/50 hover:text-red-500 p-2">✕</button>
-                    </div>
-                    <div className="flex items-center gap-4 pt-2 border-t border-gray-800">
-                       <label className="flex items-center gap-2 text-xs font-medium text-gray-500">
-                          <input type="checkbox" checked={contact.isPrimary} onChange={e => updateContact({...contact, isPrimary: e.target.checked})} className="accent-indigo-500" />
-                          Principal
-                       </label>
-                       <div className="flex gap-2">
-                          {['WhatsApp', 'Email', 'Telefone'].map(m => (
-                            <button key={m} onClick={() => updateContact({...contact, preferredMethod: m as any})} className={`px-2 py-1 rounded text-[9px] font-black uppercase border transition-all ${contact.preferredMethod === m ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-gray-950 border-gray-800 text-gray-600'}`}>
-                              {m}
-                            </button>
-                          ))}
-                       </div>
+                       <button 
+                         type="button"
+                         onClick={() => removeContact(contact.id)} 
+                         className="ml-4 text-red-500/50 hover:text-red-500 p-2 transition-colors"
+                       >
+                         ✕
+                       </button>
                     </div>
                  </div>
                ))}
                {(formData.contacts || []).length === 0 && (
-                 <p className="text-center py-10 text-gray-600 italic text-sm">Nenhum contato cadastrado.</p>
+                 <div className="text-center py-10 bg-gray-900/50 border border-gray-800 rounded-xl">
+                   <p className="text-gray-600 italic text-sm mb-3">Nenhum contato cadastrado.</p>
+                   <Button 
+                     variant="outline" 
+                     className="text-xs"
+                     onClick={() => updateContact({ 
+                       id: '', 
+                       name: '', 
+                       role: 'Comercial', 
+                       phone: '',
+                       email: '',
+                       preferredMethod: 'WhatsApp', 
+                       isPrimary: true 
+                     })}
+                   >
+                     + Adicionar Primeiro Contato
+                   </Button>
+                 </div>
                )}
              </div>
           </div>

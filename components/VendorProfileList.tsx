@@ -231,80 +231,249 @@ const VendorProfileList: React.FC<VendorProfileListProps> = ({ onNavigate }) => 
 
       {/* Modal de criação/edição */}
       <Modal isOpen={showNewProfile} onClose={() => { setShowNewProfile(false); setEditingProfile(null); }}>
-        <div className="p-6 space-y-4">
-          <h3 className="text-xl font-bold text-white">{editingProfile ? 'Editar Perfil' : 'Novo Perfil'}</h3>
+        <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+          <h3 className="text-xl font-bold text-white">{editingProfile ? 'Editar Perfil' : 'Novo Perfil Global'}</h3>
           
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-bold text-gray-400 mb-1">Nome Comercial *</label>
-              <Input 
-                value={formData.name} 
-                onChange={e => setFormData({...formData, name: e.target.value})}
-                placeholder="Nome do fornecedor"
-              />
+          <div className="space-y-6">
+            {/* Identificação */}
+            <div className="space-y-4">
+              <h4 className="text-sm font-black text-gray-400 uppercase border-b border-gray-800 pb-2">Identificação</h4>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold text-gray-400 mb-1">Nome Comercial *</label>
+                  <Input 
+                    value={formData.name} 
+                    onChange={e => setFormData({...formData, name: e.target.value})}
+                    placeholder="Nome do fornecedor"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-400 mb-1">Razão Social</label>
+                  <Input 
+                    value={formData.legalName} 
+                    onChange={e => setFormData({...formData, legalName: e.target.value})}
+                    placeholder="Razão social (opcional)"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-400 mb-1">Avaliação</label>
+                <div className="flex gap-2">
+                  {[1,2,3,4,5].map(star => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setFormData({...formData, rating: star})}
+                      className={`text-2xl ${formData.rating >= star ? 'text-amber-400' : 'text-gray-700'}`}
+                    >
+                      ★
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-bold text-gray-400 mb-1">Razão Social</label>
-              <Input 
-                value={formData.legalName} 
-                onChange={e => setFormData({...formData, legalName: e.target.value})}
-                placeholder="Razão social (opcional)"
-              />
+            {/* Links e Redes Sociais */}
+            <div className="space-y-4">
+              <h4 className="text-sm font-black text-gray-400 uppercase border-b border-gray-800 pb-2">Links e Redes Sociais</h4>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold text-gray-400 mb-1">🌐 Website</label>
+                  <Input 
+                    value={formData.websiteUrl} 
+                    onChange={e => setFormData({...formData, websiteUrl: e.target.value})}
+                    placeholder="https://..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-400 mb-1">📸 Instagram</label>
+                  <Input 
+                    value={formData.instagramUrl} 
+                    onChange={e => setFormData({...formData, instagramUrl: e.target.value})}
+                    placeholder="@usuario"
+                  />
+                </div>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-bold text-gray-400 mb-1">Avaliação</label>
-              <div className="flex gap-2">
-                {[1,2,3,4,5].map(star => (
+            {/* Contatos */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-gray-800 pb-2">
+                <h4 className="text-sm font-black text-gray-400 uppercase">Contatos</h4>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newContact = {
+                      id: Math.random().toString(36).substr(2, 9),
+                      name: '',
+                      role: 'Comercial',
+                      phone: '',
+                      email: '',
+                      preferredMethod: 'WhatsApp',
+                      isPrimary: (formData.contacts || []).length === 0
+                    };
+                    setFormData({...formData, contacts: [...(formData.contacts || []), newContact]});
+                  }}
+                  className="text-xs px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"
+                >
+                  + Adicionar
+                </button>
+              </div>
+
+              {(formData.contacts || []).length === 0 ? (
+                <div className="text-center py-6 bg-gray-900/50 border border-gray-800 rounded-xl">
+                  <p className="text-sm text-gray-600 italic mb-2">Nenhum contato cadastrado</p>
                   <button
-                    key={star}
-                    onClick={() => setFormData({...formData, rating: star})}
-                    className={`text-2xl ${formData.rating >= star ? 'text-amber-400' : 'text-gray-700'}`}
+                    type="button"
+                    onClick={() => {
+                      const newContact = {
+                        id: Math.random().toString(36).substr(2, 9),
+                        name: '',
+                        role: 'Comercial',
+                        phone: '',
+                        email: '',
+                        preferredMethod: 'WhatsApp',
+                        isPrimary: true
+                      };
+                      setFormData({...formData, contacts: [newContact]});
+                    }}
+                    className="text-xs text-indigo-400 hover:text-indigo-300"
                   >
-                    ★
+                    Adicionar primeiro contato
                   </button>
-                ))}
-              </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {(formData.contacts || []).map((contact, idx) => (
+                    <div key={contact.id} className="p-3 bg-gray-900 border border-gray-800 rounded-xl space-y-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 space-y-3">
+                          <div className="grid grid-cols-2 gap-2">
+                            <input
+                              type="text"
+                              value={contact.name}
+                              onChange={e => {
+                                const updated = [...(formData.contacts || [])];
+                                updated[idx] = {...contact, name: e.target.value};
+                                setFormData({...formData, contacts: updated});
+                              }}
+                              placeholder="Nome"
+                              className="px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-white text-sm placeholder-gray-600 focus:outline-none focus:border-indigo-500"
+                            />
+                            <input
+                              type="text"
+                              value={contact.role}
+                              onChange={e => {
+                                const updated = [...(formData.contacts || [])];
+                                updated[idx] = {...contact, role: e.target.value};
+                                setFormData({...formData, contacts: updated});
+                              }}
+                              placeholder="Cargo"
+                              className="px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-white text-sm placeholder-gray-600 focus:outline-none focus:border-indigo-500"
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <input
+                              type="tel"
+                              value={contact.phone || ''}
+                              onChange={e => {
+                                const updated = [...(formData.contacts || [])];
+                                updated[idx] = {...contact, phone: e.target.value};
+                                setFormData({...formData, contacts: updated});
+                              }}
+                              placeholder="WhatsApp/Telefone"
+                              className="px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-white text-sm placeholder-gray-600 focus:outline-none focus:border-indigo-500"
+                            />
+                            <input
+                              type="email"
+                              value={contact.email || ''}
+                              onChange={e => {
+                                const updated = [...(formData.contacts || [])];
+                                updated[idx] = {...contact, email: e.target.value};
+                                setFormData({...formData, contacts: updated});
+                              }}
+                              placeholder="Email"
+                              className="px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-white text-sm placeholder-gray-600 focus:outline-none focus:border-indigo-500"
+                            />
+                          </div>
+                          <div className="flex items-center gap-3 text-xs">
+                            <label className="flex items-center gap-1 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={contact.isPrimary}
+                                onChange={e => {
+                                  const updated = (formData.contacts || []).map((c, i) => ({
+                                    ...c,
+                                    isPrimary: i === idx ? e.target.checked : false
+                                  }));
+                                  setFormData({...formData, contacts: updated});
+                                }}
+                                className="accent-indigo-500"
+                              />
+                              <span className="text-gray-500">Principal</span>
+                            </label>
+                            <span className="text-gray-600">|</span>
+                            <span className="text-gray-600">Preferido:</span>
+                            {['WhatsApp', 'Email'].map(m => (
+                              <button
+                                key={m}
+                                type="button"
+                                onClick={() => {
+                                  const updated = [...(formData.contacts || [])];
+                                  updated[idx] = {...contact, preferredMethod: m};
+                                  setFormData({...formData, contacts: updated});
+                                }}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${contact.preferredMethod === m ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-500 hover:bg-gray-700'}`}
+                              >
+                                {m}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = (formData.contacts || []).filter((_, i) => i !== idx);
+                            setFormData({...formData, contacts: updated});
+                          }}
+                          className="ml-2 text-red-500/50 hover:text-red-500 p-1"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            {/* Condições */}
+            <div className="space-y-4">
+              <h4 className="text-sm font-black text-gray-400 uppercase border-b border-gray-800 pb-2">Condições</h4>
+              
               <div>
-                <label className="block text-sm font-bold text-gray-400 mb-1">Website</label>
+                <label className="block text-sm font-bold text-gray-400 mb-1">Condições de Pagamento</label>
                 <Input 
-                  value={formData.websiteUrl} 
-                  onChange={e => setFormData({...formData, websiteUrl: e.target.value})}
-                  placeholder="https://..."
+                  value={formData.paymentTermsDefault} 
+                  onChange={e => setFormData({...formData, paymentTermsDefault: e.target.value})}
+                  placeholder="Ex: 50% entrada + 50% 30 dias"
                 />
               </div>
+
               <div>
-                <label className="block text-sm font-bold text-gray-400 mb-1">Instagram</label>
-                <Input 
-                  value={formData.instagramUrl} 
-                  onChange={e => setFormData({...formData, instagramUrl: e.target.value})}
-                  placeholder="@usuario"
+                <label className="block text-sm font-bold text-gray-400 mb-1">Política de Cancelamento</label>
+                <textarea 
+                  value={formData.cancellationPolicyNotes} 
+                  onChange={e => setFormData({...formData, cancellationPolicyNotes: e.target.value})}
+                  placeholder="Descreva a política de cancelamento..."
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-indigo-500"
+                  rows={3}
                 />
               </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-400 mb-1">Condições de Pagamento</label>
-              <Input 
-                value={formData.paymentTermsDefault} 
-                onChange={e => setFormData({...formData, paymentTermsDefault: e.target.value})}
-                placeholder="Ex: 50% entrada + 50% 30 dias"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-400 mb-1">Política de Cancelamento</label>
-              <textarea 
-                value={formData.cancellationPolicyNotes} 
-                onChange={e => setFormData({...formData, cancellationPolicyNotes: e.target.value})}
-                placeholder="Descreva a política de cancelamento..."
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2 text-white"
-                rows={3}
-              />
             </div>
           </div>
 
@@ -313,7 +482,7 @@ const VendorProfileList: React.FC<VendorProfileListProps> = ({ onNavigate }) => 
               Cancelar
             </Button>
             <Button onClick={handleSave} className="bg-indigo-600 hover:bg-indigo-700" disabled={!formData.name.trim()}>
-              {editingProfile ? 'Salvar' : 'Criar'}
+              {editingProfile ? 'Salvar Alterações' : 'Criar Perfil'}
             </Button>
           </div>
         </div>
