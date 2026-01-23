@@ -4,6 +4,8 @@ import { Trip, Quote, QuoteStatus, Currency, Vendor } from '../types';
 import { Card, Badge, Button, Input, Modal } from './CommonUI';
 import { dataProvider } from '../lib/dataProvider';
 import WhatsAppImportModal from './WhatsAppImportModal';
+import WhatsAppQuoteImportModal from './WhatsAppQuoteImportModal';
+import LinkQuoteImportModal from './LinkQuoteImportModal';
 import { ParsedQuoteBlock } from '../lib/whatsapp/parseWhatsAppQuotes';
 
 interface QuoteListProps {
@@ -20,7 +22,10 @@ const QuoteList: React.FC<QuoteListProps> = ({ trip, vendors, quotes, onRefresh,
   const [isCompareMode, setIsCompareMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isWhatsAppQuoteImportOpen, setIsWhatsAppQuoteImportOpen] = useState(false);
+  const [isLinkImportOpen, setIsLinkImportOpen] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     category: 'all',
     status: 'all',
@@ -38,7 +43,8 @@ const QuoteList: React.FC<QuoteListProps> = ({ trip, vendors, quotes, onRefresh,
     }
     setIsImportModalOpen(false);
     onRefresh();
-    alert(`${blocks.length} orçamentos importados!`);
+    setSuccessMessage(`${blocks.length} orçamentos importados com sucesso!`);
+    setTimeout(() => setSuccessMessage(null), 3000);
   };
 
   const toggleSelect = (e: React.MouseEvent | React.ChangeEvent, id: string) => {
@@ -46,13 +52,24 @@ const QuoteList: React.FC<QuoteListProps> = ({ trip, vendors, quotes, onRefresh,
     if (selectedIds.includes(id)) {
       setSelectedIds(prev => prev.filter(i => i !== id));
     } else {
-      if (selectedIds.length >= 5) return alert('Máximo de 5 orçamentos para comparar.');
+      if (selectedIds.length >= 5) {
+        setSuccessMessage('⚠️ Máximo de 5 orçamentos para comparar');
+        setTimeout(() => setSuccessMessage(null), 3000);
+        return;
+      }
       setSelectedIds(prev => [...prev, id]);
     }
   };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 relative">
+      {/* Mensagem de sucesso */}
+      {successMessage && (
+        <div className="fixed top-4 right-4 z-50 bg-emerald-600 text-white px-6 py-3 rounded-xl shadow-lg animate-in slide-in-from-top-2 duration-300">
+          <p className="text-sm font-bold">{successMessage}</p>
+        </div>
+      )}
+      
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-black text-white uppercase tracking-tighter">Orçamentos</h2>
@@ -72,8 +89,11 @@ const QuoteList: React.FC<QuoteListProps> = ({ trip, vendors, quotes, onRefresh,
                    <button onClick={() => { setShowDropdown(false); onNavigateToWizard(); }} className="w-full text-left px-4 py-3 text-xs font-bold text-gray-300 hover:bg-gray-800 hover:text-white border-b border-gray-800 transition-colors">
                       ✏️ Lançamento Manual
                    </button>
-                   <button onClick={() => { setShowDropdown(false); setIsImportModalOpen(true); }} className="w-full text-left px-4 py-3 text-xs font-bold text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
-                      💬 Importar do WhatsApp
+                   <button onClick={() => { setShowDropdown(false); setIsWhatsAppQuoteImportOpen(true); }} className="w-full text-left px-4 py-3 text-xs font-bold text-gray-300 hover:bg-gray-800 hover:text-white border-b border-gray-800 transition-colors">
+                      📱 Importar do WhatsApp
+                   </button>
+                   <button onClick={() => { setShowDropdown(false); setIsLinkImportOpen(true); }} className="w-full text-left px-4 py-3 text-xs font-bold text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+                      🔗 Importar de Site/Link
                    </button>
                 </div>
               )}
@@ -183,6 +203,43 @@ const QuoteList: React.FC<QuoteListProps> = ({ trip, vendors, quotes, onRefresh,
               </div>
            </div>
         </div>
+      )}
+
+      {/* Modal de importação WhatsApp (novo) */}
+      {isWhatsAppQuoteImportOpen && (
+        <WhatsAppQuoteImportModal
+          trip={trip}
+          onClose={() => setIsWhatsAppQuoteImportOpen(false)}
+          onImported={() => {
+            setIsWhatsAppQuoteImportOpen(false);
+            onRefresh();
+            setSuccessMessage('✓ Orçamentos importados com sucesso!');
+            setTimeout(() => setSuccessMessage(null), 3000);
+          }}
+        />
+      )}
+
+      {/* Modal de importação por Link (novo) */}
+      {isLinkImportOpen && (
+        <LinkQuoteImportModal
+          trip={trip}
+          onClose={() => setIsLinkImportOpen(false)}
+          onImported={() => {
+            setIsLinkImportOpen(false);
+            onRefresh();
+            setSuccessMessage('✓ Orçamento importado com sucesso!');
+            setTimeout(() => setSuccessMessage(null), 3000);
+          }}
+        />
+      )}
+
+      {/* Modal de importação WhatsApp (antigo - para viajantes) */}
+      {isImportModalOpen && (
+        <WhatsAppImportModal
+          trip={trip}
+          onClose={() => setIsImportModalOpen(false)}
+          onFinalize={handleImportFinalize}
+        />
       )}
     </div>
   );
