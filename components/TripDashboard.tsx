@@ -3,7 +3,7 @@ import { Trip, Quote, Expense } from '../types';
 import { Button, Card, Modal } from './CommonUI';
 import { ICONS } from '../constants';
 import { supabaseDataProvider } from '../lib/supabaseDataProvider';
-import { formatDateShort, formatDateVeryShort } from '../lib/formatters';
+import { formatDateShort, formatDateVeryShort, formatCurrency } from '../lib/formatters';
 import TripSetupChecklist from './TripSetupChecklist';
 import LinkTravelersModal from './LinkTravelersModal';
 import LinkVendorsModal from './LinkVendorsModal';
@@ -13,16 +13,27 @@ interface TripDashboardProps {
   quotes: Quote[];
   expenses: Expense[];
   onNavigate: (tab: string) => void;
+  onNavigateToQuote: (id: string) => void;
   onRefresh: () => void;
-  onEditTrip: () => void; // Nova prop
+  onEditTrip: () => void;
 }
 
-const TripDashboard: React.FC<TripDashboardProps> = ({ trip, quotes, expenses, onNavigate, onRefresh, onEditTrip }) => {
+const TripDashboard: React.FC<TripDashboardProps> = ({ trip, quotes, expenses, onNavigate, onNavigateToQuote, onRefresh, onEditTrip }) => {
   const [travelers, setTravelers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showLinkTravelers, setShowLinkTravelers] = useState(false);
   const [showLinkVendors, setShowLinkVendors] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
+
+  // Função para limpar texto de emojis e quebras de linha
+  const cleanText = (text: string): string => {
+    if (!text) return '';
+    return text
+      .replace(/[\u{1F300}-\u{1F9FF}]/gu, '') // Remove emojis
+      .replace(/[\n\r]+/g, ' ') // Remove quebras de linha
+      .replace(/\s+/g, ' ') // Remove espaços múltiplos
+      .trim();
+  };
 
   useEffect(() => {
     loadTravelers();
@@ -176,7 +187,7 @@ const TripDashboard: React.FC<TripDashboardProps> = ({ trip, quotes, expenses, o
         <Card className="!bg-cyan-600/20 !border-cyan-600/30">
           <div className="text-center">
             <div className="text-2xl font-black text-white">
-              {totalBudget.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              {formatCurrency(totalBudget)}
             </div>
             <div className="text-sm text-gray-400 mt-1">Orçamento Total</div>
           </div>
@@ -185,7 +196,7 @@ const TripDashboard: React.FC<TripDashboardProps> = ({ trip, quotes, expenses, o
         <Card className={`${balance >= 0 ? '!bg-green-600/20 !border-green-600/30' : '!bg-red-600/20 !border-red-600/30'}`}>
           <div className="text-center">
             <div className="text-2xl font-black text-white">
-              {balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              {formatCurrency(balance)}
             </div>
             <div className="text-sm text-gray-400 mt-1">Saldo</div>
           </div>
@@ -250,21 +261,18 @@ const TripDashboard: React.FC<TripDashboardProps> = ({ trip, quotes, expenses, o
         ) : (
           <div className="space-y-2">
             {quotes.slice(0, 5).map((quote) => (
-              <div key={quote.id} className="flex items-center justify-between p-3 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors">
+              <div 
+                key={quote.id} 
+                className="flex items-center justify-between p-3 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors cursor-pointer" 
+                onClick={() => onNavigateToQuote(quote.id)}
+              >
                 <div className="flex-1">
-                  <div className="font-bold text-white">{quote.title}</div>
+                  <div className="font-bold text-white">{cleanText(quote.title)}</div>
                   <div className="text-sm text-gray-500">{quote.provider} • {quote.category}</div>
                 </div>
                 <div className="text-right">
-                  <div className="font-bold text-white">
-                    {quote.amountBRL?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                  </div>
-                  <div className={`text-xs px-2 py-0.5 rounded inline-block ${
-                    quote.status === 'Aprovada' ? 'bg-green-600/20 text-green-400' :
-                    quote.status === 'Fechada' ? 'bg-blue-600/20 text-blue-400' :
-                    'bg-gray-700 text-gray-400'
-                  }`}>
-                    {quote.status}
+                  <div className="font-bold text-indigo-400">
+                    {formatCurrency(quote.amountBrl || 0)}
                   </div>
                 </div>
               </div>
@@ -297,7 +305,7 @@ const TripDashboard: React.FC<TripDashboardProps> = ({ trip, quotes, expenses, o
                 </div>
                 <div className="text-right">
                   <div className="font-bold text-white">
-                    {expense.amountBRL?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    {formatCurrency(expense.amountBRL || 0)}
                   </div>
                   <div className={`text-xs px-2 py-0.5 rounded inline-block ${
                     expense.status === 'paid' ? 'bg-green-600/20 text-green-400' :

@@ -533,7 +533,7 @@ const VendorProfileDetailPage: React.FC<VendorProfileDetailPageProps> = ({ profi
                   {history.quotes.slice(0, 5).map((quote: any) => (
                     <div key={quote.id} className="flex items-center justify-between p-3 bg-gray-900 border border-gray-800 rounded-lg">
                       <div className="flex-1">
-                        <div className="font-bold text-white text-sm">{quote.title}</div>
+                        <div className="font-bold text-white text-sm">{cleanText(quote.title)}</div>
                         <div className="text-xs text-gray-500 mt-0.5">
                           {quote.trip?.name} • {quote.category}
                         </div>

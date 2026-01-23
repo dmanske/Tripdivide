@@ -103,26 +103,26 @@ const App: React.FC = () => {
       
       // Load related data
       const [couples, segments, vs, qs, es] = await Promise.all([
-        dataProvider.getCouples(tripId),
-        dataProvider.getSegments(tripId),
+        supabaseDataProvider.getCouples(tripId),
+        supabaseDataProvider.getSegments(tripId),
         dataProvider.getVendors(tripId),
         dataProvider.getQuotes(tripId),
         dataProvider.getExpenses(tripId)
       ]);
 
-      // Load travelers for each couple
-      const travelers = await dataProvider.getTravelers(tripId);
+      // Load trip travelers (nova arquitetura com perfis globais)
+      const tripTravelers = await supabaseDataProvider.getTripTravelers(tripId);
       
       // Build couples with members
       const couplesWithMembers = couples.map(c => ({
         id: c.id,
         name: c.name,
-        members: travelers
-          .filter(t => t.couple_id === c.id)
-          .map(t => ({
-            id: t.id,
-            name: t.full_name,
-            isChild: t.type !== 'Adulto'
+        members: tripTravelers
+          .filter(tt => tt.couple_id === c.id)
+          .map(tt => ({
+            id: tt.id, // ID do vínculo (trip_traveler_id)
+            name: tt.profile?.full_name || 'Sem nome',
+            isChild: tt.type !== 'Adulto'
           }))
       }));
 
@@ -143,7 +143,7 @@ const App: React.FC = () => {
         consensusRule: currentTrip.consensus_rule,
         categories: currentTrip.categories,
         couples: couplesWithMembers,
-        segments: segmentsFormatted.length > 0 ? segmentsFormatted : [{ id: 'seg-all', name: 'Geral', startDate: '', endDate: '' }]
+        segments: segmentsFormatted.length > 0 ? segmentsFormatted : []
       };
 
       setTrip(completeTrip);
@@ -372,7 +372,7 @@ const App: React.FC = () => {
       // Modo Viagem (com viagem ativa)
       case 'trip-dashboard': 
         if (!trip) return null;
-        return <TripDashboard trip={trip} quotes={quotes} expenses={expenses} onNavigate={navigateTo} onRefresh={() => loadData(view.tripId)} onEditTrip={handleEditTrip} />;
+        return <TripDashboard trip={trip} quotes={quotes} expenses={expenses} onNavigate={navigateTo} onNavigateToQuote={(id) => setView({ type: 'quote-detail', id, tripId: view.tripId })} onRefresh={() => loadData(view.tripId)} onEditTrip={handleEditTrip} />;
       
       case 'travelers': 
         if (view.tripId && trip) {

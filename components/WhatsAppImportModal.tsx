@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Button, Input, Card, Badge } from './CommonUI';
 import { parseWhatsAppQuotes, ParsedQuoteBlock } from '../lib/whatsapp/parseWhatsAppQuotes';
 import { Trip, Vendor } from '../types';
+import { formatCurrency } from '../lib/formatters';
 
 interface WhatsAppImportModalProps {
   trip: Trip;
@@ -127,11 +128,11 @@ const WhatsAppImportModal: React.FC<WhatsAppImportModalProps> = ({ trip, onImpor
                    <div className="grid grid-cols-3 gap-4 bg-gray-950 p-3 rounded-lg border border-gray-800">
                       <div>
                          <p className="text-[9px] font-black text-gray-600 uppercase">Valor</p>
-                         <p className="text-sm font-black text-indigo-400">{block.currency} {block.totalAmount.toLocaleString('pt-BR')}</p>
+                         <p className="text-sm font-black text-indigo-400">{block.currency} {formatCurrency(block.totalAmount)}</p>
                       </div>
                       <div>
                          <p className="text-[9px] font-black text-gray-600 uppercase">Pagamento</p>
-                         <p className="text-sm font-bold text-gray-300">{block.installments}x de R$ {block.installmentValue.toLocaleString('pt-BR')}</p>
+                         <p className="text-sm font-bold text-gray-300">{block.installments}x de {formatCurrency(block.installmentValue)}</p>
                       </div>
                       <div className="text-right">
                          <Button 

@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Trip, Quote, QuoteStatus } from '../types';
 import { Card, Button, Badge, Modal } from './CommonUI';
 import { dataProvider } from '../lib/dataProvider';
+import { formatCurrency } from '../lib/formatters';
 
 interface ComparisonToolProps {
   trip: Trip;
@@ -137,7 +138,7 @@ const ComparisonTool: React.FC<ComparisonToolProps> = ({ trip, quotes, onRefresh
                   : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-600'
                 }`}
              >
-               {q.provider} (R$ {q.amountBrl.toLocaleString('pt-BR')})
+               {q.provider} ({formatCurrency(q.amountBrl)})
              </button>
            ))}
            {availableQuotes.length === 0 && <p className="text-gray-600 italic text-sm">Nenhum orçamento disponível para votação.</p>}
@@ -165,8 +166,8 @@ const ComparisonTool: React.FC<ComparisonToolProps> = ({ trip, quotes, onRefresh
                   <div className="p-4 space-y-4 flex-1">
                     <div className="space-y-1">
                        <p className="text-[10px] text-gray-500 font-bold">VALOR TOTAL BRL</p>
-                       <p className="text-xl font-black text-indigo-400">R$ {q.amountBrl.toLocaleString('pt-BR')}</p>
-                       <p className="text-xs text-gray-600">Por casal: R$ {(q.amountBrl / 3).toLocaleString('pt-BR')}</p>
+                       <p className="text-xl font-black text-indigo-400">{formatCurrency(q.amountBrl)}</p>
+                       <p className="text-xs text-gray-600">Por casal: {formatCurrency(q.amountBrl / 3)}</p>
                     </div>
 
                     <div className="space-y-1">

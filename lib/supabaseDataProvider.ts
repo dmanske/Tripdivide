@@ -919,7 +919,39 @@ export const supabaseDataProvider = {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    
+    // Mapear snake_case para camelCase
+    return (data || []).map(q => ({
+      ...q,
+      tripId: q.trip_id,
+      vendorProfileId: q.vendor_profile_id,
+      vendor_profile_id: q.vendor_profile_id, // manter ambos para compatibilidade
+      segmentId: q.segment_id,
+      sourceType: q.source_type,
+      source_type: q.source_type,
+      sourceValue: q.source_value,
+      source_value: q.source_value,
+      exchangeRate: q.exchange_rate,
+      totalAmount: q.total_amount,
+      amountBrl: q.amount_brl,
+      validUntil: q.valid_until,
+      participantIds: q.participant_ids,
+      notesGroup: q.notes_group,
+      notesInternal: q.notes_internal,
+      linkUrl: q.link_url,
+      cancellationPolicy: q.cancellation_policy,
+      hotelDetails: q.hotel_details,
+      ticketDetails: q.ticket_details,
+      carDetails: q.car_details,
+      genericDetails: q.generic_details,
+      taxesFees: q.taxes_fees,
+      paymentTerms: q.payment_terms,
+      originalId: q.original_id,
+      variationLabel: q.variation_label,
+      createdBy: q.created_by,
+      createdAt: q.created_at,
+      updatedAt: q.updated_at
+    }));
   },
 
   getQuoteById: async (id: string) => {
@@ -944,6 +976,9 @@ export const supabaseDataProvider = {
       throw new Error('Quote deve ter um fornecedor OU uma fonte informada');
     }
     
+    // Converter "seg-all" para null (UUID inválido)
+    const segmentId = quote.segmentId === 'seg-all' ? null : quote.segmentId;
+    
     if (quote.id) {
       const { data, error } = await supabase
         .from('td_quotes')
@@ -951,7 +986,7 @@ export const supabaseDataProvider = {
           vendor_profile_id: quote.vendor_profile_id || null,
           source_type: quote.source_type || null,
           source_value: quote.source_value || null,
-          segment_id: quote.segmentId,
+          segment_id: segmentId,
           title: quote.title,
           category: quote.category,
           provider: quote.provider,
@@ -993,7 +1028,7 @@ export const supabaseDataProvider = {
           vendor_profile_id: quote.vendor_profile_id || null,
           source_type: quote.source_type || null,
           source_value: quote.source_value || null,
-          segment_id: quote.segmentId,
+          segment_id: segmentId,
           title: quote.title,
           category: quote.category,
           provider: quote.provider,
@@ -1027,6 +1062,15 @@ export const supabaseDataProvider = {
       if (error) throw error;
       return data;
     }
+  },
+
+  deleteQuote: async (id: string) => {
+    const { error } = await supabase
+      .from('td_quotes')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
   },
 
   // ==================== EXPENSES ====================

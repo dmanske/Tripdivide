@@ -141,3 +141,14 @@ export const formatDateVeryShort = (date: string | Date | null | undefined): str
     month: 'short'
   });
 };
+
+
+// Formata valor monetário em BRL com 2 casas decimais e símbolo R$
+export const formatCurrency = (value: number | null | undefined): string => {
+  if (value === null || value === undefined) return 'R$ 0,00';
+  const formatted = value.toLocaleString('pt-BR', { 
+    minimumFractionDigits: 2, 
+    maximumFractionDigits: 2 
+  });
+  return `R$ ${formatted}`;
+};

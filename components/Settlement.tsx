@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Trip, Expense, Payment } from '../types';
 import { Card, Badge } from './CommonUI';
 import { dataProvider } from '../lib/dataProvider';
+import { formatCurrency } from '../lib/formatters';
 
 interface SettlementProps {
   trip: Trip;
@@ -68,16 +69,16 @@ const Settlement: React.FC<SettlementProps> = ({ trip, expenses }) => {
                <div className="mt-4 space-y-2">
                   <div className="flex justify-between text-xs text-gray-500">
                     <span>Sua Cota:</span>
-                    <span>R$ {b.share.toLocaleString('pt-BR')}</span>
+                    <span>{formatCurrency(b.share)}</span>
                   </div>
                   <div className="flex justify-between text-xs text-gray-500">
                     <span>Total Pago:</span>
-                    <span>R$ {b.paid.toLocaleString('pt-BR')}</span>
+                    <span>{formatCurrency(b.paid)}</span>
                   </div>
                   <div className="pt-2 border-t border-gray-800 flex justify-between items-center">
                     <span className="text-sm font-bold">Saldo:</span>
                     <span className={`text-lg font-black ${b.diff >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                       {b.diff >= 0 ? '+' : ''} R$ {b.diff.toLocaleString('pt-BR')}
+                       {b.diff >= 0 ? '+' : ''} {formatCurrency(b.diff)}
                     </span>
                   </div>
                </div>
@@ -113,7 +114,7 @@ const Settlement: React.FC<SettlementProps> = ({ trip, expenses }) => {
                           </div>
                        </div>
                        <div className="text-center">
-                          <p className="text-lg font-black text-indigo-400">R$ {Math.abs(debtor.diff).toLocaleString('pt-BR')}</p>
+                          <p className="text-lg font-black text-indigo-400">{formatCurrency(Math.abs(debtor.diff))}</p>
                           <svg className="w-4 h-4 mx-auto text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
                        </div>
                        <div className="flex items-center gap-4 text-right">

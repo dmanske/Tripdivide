@@ -3,12 +3,23 @@ import { Trip, Quote } from '../types';
 import { Modal, Button, Input, Badge, Card } from './CommonUI';
 import { parseWhatsAppQuotes, ParsedQuoteBlock } from '../lib/whatsapp/parseWhatsAppQuotes';
 import { supabaseDataProvider } from '../lib/supabaseDataProvider';
+import { formatCurrency } from '../lib/formatters';
 
 interface WhatsAppQuoteImportModalProps {
   trip: Trip;
   onClose: () => void;
   onImported: () => void;
 }
+
+// Função para limpar texto de emojis e quebras de linha
+const cleanText = (text: string): string => {
+  if (!text) return '';
+  return text
+    .replace(/[\u{1F300}-\u{1F9FF}]/gu, '') // Remove emojis
+    .replace(/[\n\r]+/g, ' ') // Remove quebras de linha
+    .replace(/\s+/g, ' ') // Remove espaços múltiplos
+    .trim();
+};
 
 const WhatsAppQuoteImportModal: React.FC<WhatsAppQuoteImportModalProps> = ({ trip, onClose, onImported }) => {
   const [step, setStep] = useState<1 | 2>(1);
@@ -18,6 +29,7 @@ const WhatsAppQuoteImportModal: React.FC<WhatsAppQuoteImportModalProps> = ({ tri
   const [vendorProfiles, setVendorProfiles] = useState<any[]>([]);
   const [matchedVendor, setMatchedVendor] = useState<any>(null);
   const [importing, setImporting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     loadVendorProfiles();
@@ -64,7 +76,7 @@ const WhatsAppQuoteImportModal: React.FC<WhatsAppQuoteImportModalProps> = ({ tri
         const quoteData: Partial<Quote> = {
           ...quote.suggestedQuote,
           tripId: trip.id,
-          segmentId: trip.segments[0]?.id || 'seg-all',
+          segmentId: trip.segments[0]?.id || null, // Usar primeiro segmento real ou null
           participantIds: ['ALL'],
           vendor_profile_id: matchedVendor?.id,
           source_type: matchedVendor ? undefined : 'texto',
@@ -78,7 +90,8 @@ const WhatsAppQuoteImportModal: React.FC<WhatsAppQuoteImportModalProps> = ({ tri
       onClose();
     } catch (error) {
       console.error('Erro ao importar:', error);
-      alert('Erro ao importar orçamentos. Tente novamente.');
+      setErrorMessage('Erro ao importar orçamentos. Tente novamente.');
+      setTimeout(() => setErrorMessage(null), 3000);
     } finally {
       setImporting(false);
     }
@@ -228,7 +241,7 @@ const WhatsAppQuoteImportModal: React.FC<WhatsAppQuoteImportModalProps> = ({ tri
                       <div className="flex-1 space-y-2">
                         <div className="flex items-start justify-between gap-2">
                           <div>
-                            <h4 className="font-bold text-white text-sm leading-tight">{quote.title}</h4>
+                            <h4 className="font-bold text-white text-sm leading-tight">{cleanText(quote.title)}</h4>
                             <div className="flex flex-wrap gap-2 mt-1">
                               <Badge color="indigo" className="text-[9px]">{quote.category}</Badge>
                               <Badge color={getConfidenceColor(quote.confidence)} className="text-[9px]">
@@ -238,11 +251,11 @@ const WhatsAppQuoteImportModal: React.FC<WhatsAppQuoteImportModalProps> = ({ tri
                           </div>
                           <div className="text-right">
                             <p className="text-lg font-black text-white">
-                              R$ {quote.totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              {formatCurrency(quote.totalAmount)}
                             </p>
                             {quote.installments > 1 && (
                               <p className="text-xs text-gray-500">
-                                {quote.installments}x de R$ {quote.installmentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                {quote.installments}x de {formatCurrency(quote.installmentValue)}
                               </p>
                             )}
                           </div>
@@ -253,17 +266,17 @@ const WhatsAppQuoteImportModal: React.FC<WhatsAppQuoteImportModalProps> = ({ tri
                           <div className="flex flex-wrap gap-2 text-xs">
                             {quote.cashPrice && (
                               <span className="px-2 py-1 bg-green-600/20 text-green-400 rounded">
-                                💰 À vista: R$ {quote.cashPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                💰 À vista: {formatCurrency(quote.cashPrice)}
                               </span>
                             )}
                             {quote.creditPrice && (
                               <span className="px-2 py-1 bg-blue-600/20 text-blue-400 rounded">
-                                💳 Cartão: R$ {quote.creditPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                💳 Cartão: {formatCurrency(quote.creditPrice)}
                               </span>
                             )}
                             {quote.cashDiscount && quote.cashDiscount > 0 && (
                               <span className="px-2 py-1 bg-amber-600/20 text-amber-400 rounded">
-                                🎁 Economia: R$ {quote.cashDiscount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                🎁 Economia: {formatCurrency(quote.cashDiscount)}
                               </span>
                             )}
                           </div>

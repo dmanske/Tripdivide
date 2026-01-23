@@ -3,6 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { Trip, Quote, QuoteStatus, Currency, PaymentMethod } from '../types';
 import { Card, Badge, Button } from './CommonUI';
 import { dataProvider } from '../lib/dataProvider';
+import { formatCurrency } from '../lib/formatters';
 
 interface ComparisonPageProps {
   trip: Trip;
@@ -52,21 +53,21 @@ const ComparisonPage: React.FC<ComparisonPageProps> = ({ trip, quotes, onBack, o
   const rows = [
     { label: 'Fornecedor', accessor: (q: Quote) => q.provider },
     { label: 'Status', accessor: (q: Quote) => q.status },
-    { label: 'Total Original', accessor: (q: Quote) => `${q.currency} ${q.totalAmount.toLocaleString('pt-BR')}` },
-    { label: 'Total BRL', accessor: (q: Quote) => `R$ ${q.amountBrl.toLocaleString('pt-BR')}`, critical: true },
-    { label: 'Custo por Pessoa', accessor: (q: Quote) => `R$ ${(q.amountBrl / travelersCount).toFixed(2)}` },
+    { label: 'Total Original', accessor: (q: Quote) => `${q.currency} ${formatCurrency(q.totalAmount)}` },
+    { label: 'Total BRL', accessor: (q: Quote) => formatCurrency(q.amountBrl), critical: true },
+    { label: 'Custo por Pessoa', accessor: (q: Quote) => formatCurrency(q.amountBrl / travelersCount) },
     { 
       label: 'Custo por Dia', 
       accessor: (q: Quote) => {
         const days = extractDays(q);
-        return days ? `R$ ${(q.amountBrl / days).toFixed(2)} (${days} dias)` : 'N/A';
+        return days ? `${formatCurrency(q.amountBrl / days)} (${days} dias)` : 'N/A';
       }
     },
-    { label: 'Câmbio Aplicado', accessor: (q: Quote) => q.currency === Currency.BRL ? '-' : `R$ ${q.exchangeRate}` },
+    { label: 'Câmbio Aplicado', accessor: (q: Quote) => q.currency === Currency.BRL ? '-' : formatCurrency(q.exchangeRate) },
     { label: 'Vencimento', accessor: (q: Quote) => new Date(q.validUntil).toLocaleDateString('pt-BR') },
     { label: 'Cancelamento', accessor: (q: Quote) => q.cancellationPolicy },
     { label: 'Parcelas', accessor: (q: Quote) => `${q.paymentTerms.installments}x` },
-    { label: 'Desconto à Vista', accessor: (q: Quote) => q.paymentTerms.cashDiscount ? `R$ ${q.paymentTerms.cashDiscount}` : 'Nenhum' },
+    { label: 'Desconto à Vista', accessor: (q: Quote) => q.paymentTerms.cashDiscount ? formatCurrency(q.paymentTerms.cashDiscount) : 'Nenhum' },
     { label: 'Completude', accessor: (q: Quote) => `${q.completeness}%` },
   ];
 
@@ -138,7 +139,7 @@ const ComparisonPage: React.FC<ComparisonPageProps> = ({ trip, quotes, onBack, o
             <div>
               <p className="text-[10px] font-black text-emerald-400 uppercase">Melhor Preço</p>
               <p className="text-2xl font-black text-white mt-1">
-                R$ {Math.min(...sortedQuotes.map(q => q.amountBrl)).toLocaleString('pt-BR')}
+                {formatCurrency(Math.min(...sortedQuotes.map(q => q.amountBrl)))}
               </p>
             </div>
             <div className="text-3xl">💰</div>
@@ -150,7 +151,7 @@ const ComparisonPage: React.FC<ComparisonPageProps> = ({ trip, quotes, onBack, o
             <div>
               <p className="text-[10px] font-black text-amber-400 uppercase">Diferença Máx</p>
               <p className="text-2xl font-black text-white mt-1">
-                R$ {(Math.max(...sortedQuotes.map(q => q.amountBrl)) - Math.min(...sortedQuotes.map(q => q.amountBrl))).toLocaleString('pt-BR')}
+                {formatCurrency(Math.max(...sortedQuotes.map(q => q.amountBrl)) - Math.min(...sortedQuotes.map(q => q.amountBrl)))}
               </p>
             </div>
             <div className="text-3xl">📊</div>
@@ -350,7 +351,7 @@ const ComparisonPage: React.FC<ComparisonPageProps> = ({ trip, quotes, onBack, o
                          const days = extractDays(q);
                          return (
                            <td key={q.id} className="p-4 text-sm font-bold text-indigo-400">
-                             {days ? `R$ ${(q.amountBrl / days).toFixed(2)}` : '-'}
+                             {days ? formatCurrency(q.amountBrl / days) : '-'}
                            </td>
                          );
                        })}

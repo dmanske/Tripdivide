@@ -159,7 +159,7 @@ const LinkQuoteImportModal: React.FC<LinkQuoteImportModalProps> = ({ trip, onClo
         provider: preview?.provider,
         status: QuoteStatus.ANALYSIS,
         validUntil: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
-        segmentId: trip.segments[0]?.id || 'seg-all',
+        segmentId: trip.segments[0]?.id || null, // Usar primeiro segmento real ou null
         participantIds: ['ALL'],
         notesInternal: formData.notes,
         paymentTerms: {

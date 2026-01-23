@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Trip, Expense, ExpenseStatus, Couple } from '../types';
 import { Card, Badge, Button, Input } from './CommonUI';
+import { formatCurrency } from '../lib/formatters';
 
 interface ExpenseListProps {
   trip: Trip;
@@ -53,15 +54,15 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ trip, expenses, onRefresh, on
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="!bg-indigo-600/5 !border-indigo-500/20">
           <p className="text-[10px] font-black text-indigo-400 uppercase mb-1">Total Fechado</p>
-          <p className="text-3xl font-black text-white">R$ {summary.total.toLocaleString('pt-BR')}</p>
+          <p className="text-3xl font-black text-white">{formatCurrency(summary.total)}</p>
         </Card>
         <Card className="!bg-amber-600/5 !border-amber-500/20">
           <p className="text-[10px] font-black text-amber-400 uppercase mb-1">Total Confirmado (Pendente)</p>
-          <p className="text-3xl font-black text-white">R$ {summary.confirmed.toLocaleString('pt-BR')}</p>
+          <p className="text-3xl font-black text-white">{formatCurrency(summary.confirmed)}</p>
         </Card>
         <Card className="!bg-emerald-600/5 !border-emerald-500/20">
           <p className="text-[10px] font-black text-emerald-400 uppercase mb-1">Total Efetivamente Pago</p>
-          <p className="text-3xl font-black text-white">R$ {summary.paid.toLocaleString('pt-BR')}</p>
+          <p className="text-3xl font-black text-white">{formatCurrency(summary.paid)}</p>
         </Card>
       </div>
 
@@ -129,8 +130,8 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ trip, expenses, onRefresh, on
                   )}
                 </td>
                 <td className="p-4">
-                  <div className="font-black text-white">R$ {(e.amountBrl || 0).toLocaleString('pt-BR')}</div>
-                  <div className="text-[10px] text-gray-600">{e.currency} {(e.amount || 0).toLocaleString()} ({e.exchangeRate})</div>
+                  <div className="font-black text-white">{formatCurrency(e.amountBrl || 0)}</div>
+                  <div className="text-[10px] text-gray-600">{e.currency} {formatCurrency(e.amount || 0)} ({formatCurrency(e.exchangeRate)})</div>
                 </td>
                 <td className="p-4">
                   <Badge color={e.status === ExpenseStatus.PAID ? 'green' : e.status === ExpenseStatus.CONFIRMED ? 'yellow' : 'gray'}>

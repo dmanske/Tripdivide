@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Trip, Payment, Expense } from '../types';
 import { Card, Badge, Input, Button } from './CommonUI';
 import { dataProvider } from '../lib/dataProvider';
-import { formatSupabaseDate } from '../lib/formatters';
+import { formatSupabaseDate, formatCurrency } from '../lib/formatters';
 
 interface PaymentsPageProps {
   trip: Trip;
@@ -44,7 +44,7 @@ const PaymentsPage: React.FC<PaymentsPageProps> = ({ trip }) => {
         </div>
         <Card className="!p-3 !bg-indigo-600/10 border-indigo-500/20">
            <p className="text-[10px] font-black text-indigo-400 uppercase">Total Desembolsado</p>
-           <p className="text-2xl font-black text-white">R$ {totalPaid.toLocaleString('pt-BR')}</p>
+           <p className="text-2xl font-black text-white">{formatCurrency(totalPaid)}</p>
         </Card>
       </header>
 
@@ -79,7 +79,7 @@ const PaymentsPage: React.FC<PaymentsPageProps> = ({ trip }) => {
                      <td className="p-4 font-bold text-gray-200 text-sm">{couple?.name}</td>
                      <td className="p-4 text-gray-400 text-sm">{expense?.title || 'Avulso'}</td>
                      <td className="p-4"><Badge color="indigo">{p.method.toUpperCase()}</Badge></td>
-                     <td className="p-4 text-right font-black text-emerald-400">R$ {(p.paidAmountBrl || 0).toLocaleString('pt-BR')}</td>
+                     <td className="p-4 text-right font-black text-emerald-400">{formatCurrency(p.paidAmountBrl || 0)}</td>
                   </tr>
                 );
               })}

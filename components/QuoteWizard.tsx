@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Trip, Quote, QuoteStatus, Currency, PaymentMethod } from '../types';
 import { Card, Badge, Button, Input } from './CommonUI';
 import { supabaseDataProvider } from '../lib/supabaseDataProvider';
+import { formatCurrency } from '../lib/formatters';
 import QuickCreateVendorModal from './QuickCreateVendorModal';
 
 interface QuoteWizardProps {
@@ -30,7 +31,7 @@ const QuoteWizard: React.FC<QuoteWizardProps> = ({ trip, initialData, onSave, on
     totalAmount: 0,
     amountBrl: 0,
     category: trip.categories[0],
-    segmentId: 'seg-all',
+    segmentId: trip.segments[0]?.id || null, // Usar primeiro segmento real ou null
     paymentTerms: { methods: [PaymentMethod.PIX], installments: 1, installmentValue: 0 },
     attachments: [],
     completeness: 0,
@@ -284,7 +285,7 @@ const QuoteWizard: React.FC<QuoteWizardProps> = ({ trip, initialData, onSave, on
           <Input label="Taxas e Impostos Opcionais" type="number" step="0.01" value={formData.taxesFees} onChange={e => setFormData({...formData, taxesFees: Number(e.target.value)})} />
           <div className="p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-xl">
             <p className="text-xs font-bold text-indigo-400 uppercase mb-1">Total em Reais</p>
-            <p className="text-3xl font-black text-white">R$ {formData.amountBrl?.toLocaleString('pt-BR')}</p>
+            <p className="text-3xl font-black text-white">{formatCurrency(formData.amountBrl || 0)}</p>
           </div>
         </div>
       );
@@ -307,7 +308,7 @@ const QuoteWizard: React.FC<QuoteWizardProps> = ({ trip, initialData, onSave, on
            </div>
            <div className="grid grid-cols-2 gap-4">
               <Input label="Parcelas (Max)" type="number" min="1" max="12" value={formData.paymentTerms?.installments} onChange={e => setFormData({...formData, paymentTerms: {...formData.paymentTerms!, installments: Number(e.target.value)}})} />
-              <Input label="Valor da Parcela" value={`R$ ${formData.paymentTerms?.installmentValue.toLocaleString('pt-BR')}`} disabled />
+              <Input label="Valor da Parcela" value={formatCurrency(formData.paymentTerms?.installmentValue || 0)} disabled />
            </div>
            <Input label="Desconto à Vista (Valor)" type="number" value={formData.paymentTerms?.cashDiscount} onChange={e => setFormData({...formData, paymentTerms: {...formData.paymentTerms!, cashDiscount: Number(e.target.value)}})} />
         </div>
@@ -459,8 +460,8 @@ const QuoteWizard: React.FC<QuoteWizardProps> = ({ trip, initialData, onSave, on
              </div>
              <div className="p-3 bg-gray-900 rounded-xl space-y-1">
                 <p className="text-[10px] text-gray-500 font-bold uppercase">Impacto Financeiro</p>
-                <p className="text-2xl font-black text-white">R$ {formData.amountBrl?.toLocaleString('pt-BR')}</p>
-                <p className="text-[10px] text-gray-600">Por casal: R$ {((formData.amountBrl || 0) / 3).toLocaleString('pt-BR')}</p>
+                <p className="text-2xl font-black text-white">{formatCurrency(formData.amountBrl || 0)}</p>
+                <p className="text-[10px] text-gray-600">Por casal: {formatCurrency((formData.amountBrl || 0) / 3)}</p>
              </div>
              
              <div className="space-y-2 pt-4 border-t border-gray-800">

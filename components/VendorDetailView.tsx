@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Trip, Vendor, Quote, QuoteStatus, VendorQuoteRequest } from '../types';
 import { Card, Badge, Button, Modal, Input } from './CommonUI';
 import { dataProvider } from '../lib/dataProvider';
-import { formatSupabaseDateTime } from '../lib/formatters';
+import { formatSupabaseDateTime, formatCurrency } from '../lib/formatters';
 
 interface VendorDetailViewProps {
   trip: Trip;
@@ -22,7 +22,7 @@ const VendorDetailView: React.FC<VendorDetailViewProps> = ({ trip, vendor, onEdi
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [requestData, setRequestData] = useState({
     category: vendor.categories[0] || 'Geral',
-    segmentId: 'seg-all',
+    segmentId: trip.segments[0]?.id || null, // Usar primeiro segmento real ou null
     notes: ''
   });
 
@@ -30,13 +30,12 @@ const VendorDetailView: React.FC<VendorDetailViewProps> = ({ trip, vendor, onEdi
     loadData();
   }, [vendor.id]);
 
-  const loadData = async () => {
-    const [allQ, allR] = await Promise.all([
-      dataProvider.getQuotes(trip.id),
-      dataProvider.getVendorRequests(vendor.id)
-    ]);
-    setVendorQuotes(allQ.filter(q => q.vendor_profile_id === vendor.id));
-    setRequests(allR);
+  const [copySuccess, setCopySuccess] = useState(false);
+
+  const handleCopyMessage = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopySuccess(true);
+    setTimeout(() => setCopySuccess(false), 2000);
   };
 
   const getTemplate = () => {
@@ -59,9 +58,15 @@ const VendorDetailView: React.FC<VendorDetailViewProps> = ({ trip, vendor, onEdi
     return base;
   };
 
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   const handleSendWhatsApp = async () => {
     const contact = vendor.contacts.find(c => c.phone) || vendor.contacts[0];
-    if (!contact?.phone) return alert('Nenhum telefone cadastrado para este fornecedor.');
+    if (!contact?.phone) {
+      setErrorMessage('Nenhum telefone cadastrado para este fornecedor.');
+      setTimeout(() => setErrorMessage(null), 3000);
+      return;
+    }
     
     const message = getTemplate();
     await dataProvider.saveVendorRequest({
@@ -422,7 +427,7 @@ const VendorDetailView: React.FC<VendorDetailViewProps> = ({ trip, vendor, onEdi
               {vendorQuotes.map(q => (
                 <Card key={q.id} onClick={() => onNavigateToQuote(q.id)} className="cursor-pointer hover:border-indigo-500 transition-all border-2">
                    <h4 className="font-black text-white uppercase">{q.title}</h4>
-                   <p className="text-sm font-bold text-indigo-400">R$ {q.amountBrl.toLocaleString('pt-BR')}</p>
+                   <p className="text-sm font-bold text-indigo-400">{formatCurrency(q.amountBrl)}</p>
                 </Card>
               ))}
            </div>
