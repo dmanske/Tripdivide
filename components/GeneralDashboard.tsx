@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button, Card } from './CommonUI';
 import { ICONS } from '../constants';
 import { supabaseDataProvider } from '../lib/supabaseDataProvider';
+import { formatDateShort } from '../lib/formatters';
 
 interface GeneralDashboardProps {
   onNavigate: (tab: string) => void;
@@ -115,11 +116,6 @@ const GeneralDashboard: React.FC<GeneralDashboardProps> = ({ onNavigate, onOpenT
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatDate = (date: string) => {
-    if (!date) return '';
-    return new Date(date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
   if (loading) {
@@ -331,7 +327,7 @@ const GeneralDashboard: React.FC<GeneralDashboardProps> = ({ onNavigate, onOpenT
                         <div className="flex items-center gap-3 text-sm text-gray-400 mt-1">
                           <span className="flex items-center gap-1">
                             <ICONS.Calendar className="w-4 h-4" />
-                            {formatDate(trip.start_date)} - {formatDate(trip.end_date)}
+                            {formatDateShort(trip.start_date)} - {formatDateShort(trip.end_date)}
                           </span>
                           {trip.destinations && trip.destinations.length > 0 && (
                             <span className="flex items-center gap-1 truncate">

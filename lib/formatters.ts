@@ -114,3 +114,30 @@ export const formatSupabaseDateTime = (timestamp: string | null | undefined): st
   const date = parseSupabaseDate(timestamp);
   return date ? formatDateTime(date) : '';
 };
+
+// Formata data no estilo curto para dashboards (DD MMM YYYY)
+export const formatDateShort = (date: string | Date | null | undefined): string => {
+  if (!date) return '';
+  
+  const d = parseSupabaseDate(typeof date === 'string' ? date : date.toISOString());
+  if (!d) return '';
+  
+  return d.toLocaleDateString('pt-BR', { 
+    day: '2-digit', 
+    month: 'short', 
+    year: 'numeric' 
+  });
+};
+
+// Formata data no estilo muito curto (DD MMM)
+export const formatDateVeryShort = (date: string | Date | null | undefined): string => {
+  if (!date) return '';
+  
+  const d = parseSupabaseDate(typeof date === 'string' ? date : date.toISOString());
+  if (!d) return '';
+  
+  return d.toLocaleDateString('pt-BR', { 
+    day: '2-digit', 
+    month: 'short'
+  });
+};

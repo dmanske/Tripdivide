@@ -59,6 +59,7 @@ const App: React.FC = () => {
   const [activeTripId, setActiveTripId] = useState<string | null>(null); // Viagem atualmente aberta (modo viagem)
   const [loading, setLoading] = useState(false); // Não carrega viagem automaticamente
   const [showTripWizard, setShowTripWizard] = useState(false);
+  const [editingTrip, setEditingTrip] = useState<any>(null); // Viagem sendo editada
   const [authMode, setAuthMode] = useState<'signup' | 'login'>('login');
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
@@ -221,6 +222,26 @@ const App: React.FC = () => {
   };
 
   const handleCreateTrip = () => {
+    setEditingTrip(null); // Limpar modo de edição
+    setShowTripWizard(true);
+  };
+
+  const handleEditTrip = async () => {
+    if (!activeTripId) return;
+    
+    // Carregar dados completos da viagem para edição
+    const tripData = await supabaseDataProvider.getTripById(activeTripId);
+    const segments = await supabaseDataProvider.getSegments(activeTripId);
+    
+    setEditingTrip({
+      ...tripData,
+      segments: segments.map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        startDate: s.start_date || '',
+        endDate: s.end_date || ''
+      }))
+    });
     setShowTripWizard(true);
   };
 
@@ -262,45 +283,65 @@ const App: React.FC = () => {
         {/* Trip Wizard */}
         {showTripWizard && (
           <TripWizard
-            onClose={() => setShowTripWizard(false)}
+            initialTrip={editingTrip}
+            onClose={() => {
+              setShowTripWizard(false);
+              setEditingTrip(null);
+            }}
             onSave={async (tripData) => {
+              console.log('🎯 TripWizard onSave - tripData:', tripData);
               const newTrip = await supabaseDataProvider.saveTrip(tripData);
+              console.log('✅ Viagem salva:', newTrip.id);
               
-              // Criar segmentos baseados nos destinos
-              if (tripData.destinations && tripData.destinations.length > 0) {
-                // Se tem múltiplos destinos, criar um segmento para cada
-                if (tripData.destinations.length > 1) {
-                  for (const destination of tripData.destinations) {
-                    await supabaseDataProvider.saveSegment({
-                      tripId: newTrip.id,
-                      name: destination,
-                      startDate: null,
-                      endDate: null
-                    });
-                  }
-                } else {
-                  // Se tem apenas 1 destino, criar segmento "Viagem Completa"
-                  await supabaseDataProvider.saveSegment({
+              // Criar segmentos com datas específicas
+              let segmentIds: string[] = [];
+              console.log('📍 Segmentos a criar:', tripData.segments);
+              
+              if (tripData.segments && tripData.segments.length > 0) {
+                for (const segment of tripData.segments) {
+                  console.log('💾 Salvando segmento:', segment);
+                  const savedSegment = await supabaseDataProvider.saveSegment({
                     tripId: newTrip.id,
-                    name: 'Viagem Completa',
-                    startDate: tripData.startDate,
-                    endDate: tripData.endDate
+                    name: segment.name,
+                    startDate: segment.startDate,
+                    endDate: segment.endDate
                   });
+                  console.log('✅ Segmento salvo:', savedSegment);
+                  segmentIds.push(savedSegment.id);
                 }
               } else {
-                // Fallback: se não tem destinos, criar "Viagem Completa"
-                await supabaseDataProvider.saveSegment({
+                console.log('⚠️ Nenhum segmento encontrado, criando "Viagem Completa"');
+                // Fallback: se não tem segmentos, criar "Viagem Completa"
+                const segment = await supabaseDataProvider.saveSegment({
                   tripId: newTrip.id,
                   name: 'Viagem Completa',
                   startDate: tripData.startDate,
                   endDate: tripData.endDate
                 });
+                segmentIds.push(segment.id);
+              }
+              
+              console.log('✅ Total de segmentos criados:', segmentIds.length);
+
+              // Vincular viajantes selecionados
+              if (tripData.selectedTravelerIds && tripData.selectedTravelerIds.length > 0) {
+                for (const travelerId of tripData.selectedTravelerIds) {
+                  await supabaseDataProvider.linkTravelerToTrip({
+                    tripId: newTrip.id,
+                    travelerProfileId: travelerId,
+                    coupleId: null,
+                    goesToSegments: segmentIds,
+                    isPayer: true,
+                    countInSplit: true
+                  });
+                }
               }
 
               setShowTripWizard(false);
+              setEditingTrip(null);
               setShowLanding(false);
               await loadData(newTrip.id);
-              setView({ type: 'dashboard' });
+              setView({ type: 'trip-dashboard', tripId: newTrip.id });
             }}
           />
         )}
@@ -329,7 +370,7 @@ const App: React.FC = () => {
       // Modo Viagem (com viagem ativa)
       case 'trip-dashboard': 
         if (!trip) return null;
-        return <TripDashboard trip={trip} quotes={quotes} expenses={expenses} onNavigate={navigateTo} onRefresh={() => loadData(view.tripId)} />;
+        return <TripDashboard trip={trip} quotes={quotes} expenses={expenses} onNavigate={navigateTo} onRefresh={() => loadData(view.tripId)} onEditTrip={handleEditTrip} />;
       
       case 'travelers': 
         if (view.tripId && trip) {
@@ -443,45 +484,131 @@ const App: React.FC = () => {
       {/* Trip Wizard */}
       {showTripWizard && (
         <TripWizard
-          onClose={() => setShowTripWizard(false)}
+          initialTrip={editingTrip}
+          onClose={() => {
+            setShowTripWizard(false);
+            setEditingTrip(null);
+          }}
           onSave={async (tripData) => {
-            const newTrip = await supabaseDataProvider.saveTrip(tripData);
-            
-            // Criar segmentos baseados nos destinos
-            if (tripData.destinations && tripData.destinations.length > 0) {
-              // Se tem múltiplos destinos, criar um segmento para cada
-              if (tripData.destinations.length > 1) {
-                for (const destination of tripData.destinations) {
-                  await supabaseDataProvider.saveSegment({
+            if (tripData.id) {
+              // MODO EDIÇÃO
+              console.log('✏️ Editando viagem existente:', tripData.id);
+              
+              // Atualizar dados básicos da viagem
+              await supabaseDataProvider.saveTrip(tripData);
+              console.log('✅ Viagem atualizada');
+              
+              // Gerenciar segmentos: comparar com os existentes
+              const existingSegments = await supabaseDataProvider.getSegments(tripData.id);
+              const existingSegmentIds = new Set(existingSegments.map((s: any) => s.id));
+              const newSegmentIds = new Set((tripData.segments || []).map((s: any) => s.id).filter(Boolean));
+              
+              // Deletar segmentos removidos
+              for (const seg of existingSegments) {
+                if (!newSegmentIds.has(seg.id)) {
+                  console.log('🗑️ Deletando segmento:', seg.name);
+                  await supabase.from('td_segments').delete().eq('id', seg.id);
+                }
+              }
+              
+              // Atualizar ou criar segmentos
+              if (tripData.segments && tripData.segments.length > 0) {
+                for (const segment of tripData.segments) {
+                  if (segment.id && existingSegmentIds.has(segment.id)) {
+                    // Atualizar existente
+                    console.log('📝 Atualizando segmento:', segment.name);
+                    await supabaseDataProvider.saveSegment({
+                      id: segment.id,
+                      tripId: tripData.id,
+                      name: segment.name,
+                      startDate: segment.startDate,
+                      endDate: segment.endDate
+                    });
+                  } else {
+                    // Criar novo
+                    console.log('➕ Criando novo segmento:', segment.name);
+                    await supabaseDataProvider.saveSegment({
+                      tripId: tripData.id,
+                      name: segment.name,
+                      startDate: segment.startDate,
+                      endDate: segment.endDate
+                    });
+                  }
+                }
+              }
+              
+              console.log('✅ Segmentos atualizados');
+              
+              // Recarregar dados
+              await loadData(tripData.id);
+              setView({ type: 'trip-dashboard', tripId: tripData.id });
+              
+            } else {
+              // MODO CRIAÇÃO
+              const newTrip = await supabaseDataProvider.saveTrip(tripData);
+              console.log('✅ Viagem criada:', newTrip.id);
+              
+              // Criar segmentos com datas específicas
+              let segmentIds: string[] = [];
+              console.log('📍 Segmentos a criar:', tripData.segments);
+              
+              if (tripData.segments && tripData.segments.length > 0) {
+                for (const segment of tripData.segments) {
+                  console.log('💾 Salvando segmento:', segment);
+                  const savedSegment = await supabaseDataProvider.saveSegment({
                     tripId: newTrip.id,
-                    name: destination,
-                    startDate: null,
-                    endDate: null
+                    name: segment.name,
+                    startDate: segment.startDate,
+                    endDate: segment.endDate
                   });
+                  console.log('✅ Segmento salvo:', savedSegment);
+                  segmentIds.push(savedSegment.id);
                 }
               } else {
-                // Se tem apenas 1 destino, criar segmento "Viagem Completa"
-                await supabaseDataProvider.saveSegment({
+                console.log('⚠️ Nenhum segmento encontrado, criando "Viagem Completa"');
+                const segment = await supabaseDataProvider.saveSegment({
                   tripId: newTrip.id,
                   name: 'Viagem Completa',
                   startDate: tripData.startDate,
                   endDate: tripData.endDate
                 });
+                segmentIds.push(segment.id);
               }
-            } else {
-              // Fallback: se não tem destinos, criar "Viagem Completa"
-              await supabaseDataProvider.saveSegment({
-                tripId: newTrip.id,
-                name: 'Viagem Completa',
-                startDate: tripData.startDate,
-                endDate: tripData.endDate
-              });
+              
+              console.log('✅ Total de segmentos criados:', segmentIds.length);
+
+              // Vincular viajantes selecionados
+              if (tripData.selectedTravelerIds && tripData.selectedTravelerIds.length > 0) {
+                for (const travelerId of tripData.selectedTravelerIds) {
+                  await supabaseDataProvider.linkTravelerToTrip({
+                    tripId: newTrip.id,
+                    travelerProfileId: travelerId,
+                    coupleId: null,
+                    goesToSegments: segmentIds,
+                    isPayer: true,
+                    countInSplit: true
+                  });
+                }
+              }
+
+              // Vincular fornecedores selecionados
+              if (tripData.selectedVendorIds && tripData.selectedVendorIds.length > 0) {
+                for (const vendorId of tripData.selectedVendorIds) {
+                  await supabaseDataProvider.linkVendorToTrip({
+                    tripId: newTrip.id,
+                    vendorProfileId: vendorId,
+                    isFavorite: tripData.markVendorsAsFavorite || false
+                  });
+                }
+              }
+
+              await loadData(newTrip.id);
+              setView({ type: 'trip-dashboard', tripId: newTrip.id });
             }
 
             setShowTripWizard(false);
+            setEditingTrip(null);
             setShowLanding(false);
-            await loadData(newTrip.id);
-            setView({ type: 'trip-dashboard', tripId: newTrip.id });
           }}
         />
       )}

@@ -20,6 +20,11 @@ export interface ParsedQuoteBlock {
   confidence: 'alta' | 'média' | 'baixa';
   missingFields: string[];
   suggestedQuote: Partial<Quote>;
+  // Novos campos para formas de pagamento
+  cashPrice?: number;
+  cashDiscount?: number;
+  creditPrice?: number;
+  pixPrice?: number;
 }
 
 /**
@@ -38,8 +43,8 @@ const normalizeText = (text: string) => {
  * Tenta extrair valores monetários de um bloco de texto
  */
 const extractPrices = (text: string) => {
-  const brlRegex = /R\$([\d.,]+)/gi;
-  const usdRegex = /U\$([\d.,]+)/gi;
+  const brlRegex = /R\$\s*([\d.,]+)/gi;
+  const usdRegex = /U\$\s*([\d.,]+)/gi;
   
   const parseVal = (s: string) => {
     // Remove pontos de milhar e troca vírgula por ponto
@@ -50,7 +55,18 @@ const extractPrices = (text: string) => {
   const brlMatches = [...text.matchAll(brlRegex)].map(m => parseVal(m[1]));
   const usdMatches = [...text.matchAll(usdRegex)].map(m => parseVal(m[1]));
 
-  return { brl: brlMatches, usd: usdMatches };
+  // Detectar formas de pagamento específicas
+  const cashMatch = text.match(/(?:a\s*vista|à\s*vista|pix).*?R\$\s*([\d.,]+)/i);
+  const creditMatch = text.match(/(?:cartão|crédito|credit).*?R\$\s*([\d.,]+)/i);
+  const pixMatch = text.match(/pix.*?R\$\s*([\d.,]+)/i);
+
+  return { 
+    brl: brlMatches, 
+    usd: usdMatches,
+    cashPrice: cashMatch ? parseVal(cashMatch[1]) : undefined,
+    creditPrice: creditMatch ? parseVal(creditMatch[1]) : undefined,
+    pixPrice: pixMatch ? parseVal(pixMatch[1]) : undefined
+  };
 };
 
 /**
@@ -63,24 +79,38 @@ const analyzeBlock = (text: string, vendorPhone: string): ParsedQuoteBlock => {
   // Heurística de Categoria
   let category = 'Diversos';
   const lowerText = text.toLowerCase();
-  if (/ticket|park|disney|universal|seaworld|ingress|parque/i.test(lowerText)) {
-    category = 'Parques Temáticos';
-  } else if (/pickup|dropoff|diária|locação|carro|van|mini van|alamo|hertz/i.test(lowerText)) {
+  if (/ticket|park|disney|universal|seaworld|ingress|parque|legoland|kennedy/i.test(lowerText)) {
+    category = 'Ingressos/Atrações';
+  } else if (/pickup|dropoff|diária|diarias|locação|locacao|carro|van|mini van|alamo|hertz|sienna|pacifica/i.test(lowerText)) {
     category = 'Aluguel de Carro';
-  } else if (/hotel|hospedagem|quarto|stay/i.test(lowerText)) {
+  } else if (/hotel|hospedagem|quarto|stay|check-in|checkout/i.test(lowerText)) {
     category = 'Hospedagem';
+  } else if (/voo|flight|passagem|aéreo|aereo/i.test(lowerText)) {
+    category = 'Voo';
+  } else if (/restaurante|refeição|jantar|almoço/i.test(lowerText)) {
+    category = 'Restaurantes';
   }
 
   const prices = extractPrices(text);
   const currency = prices.usd.length > prices.brl.length ? Currency.USD : Currency.BRL;
   
-  // Tenta achar o valor mais alto (geralmente o total)
-  const allPrices = currency === Currency.USD ? prices.usd : prices.brl;
-  const totalAmount = allPrices.length > 0 ? Math.max(...allPrices) : 0;
+  // Determinar o valor total (preferir preço à vista se disponível)
+  let totalAmount = 0;
+  let cashDiscount = 0;
+  
+  if (prices.cashPrice && prices.creditPrice) {
+    totalAmount = prices.cashPrice;
+    cashDiscount = prices.creditPrice - prices.cashPrice;
+  } else if (prices.pixPrice) {
+    totalAmount = prices.pixPrice;
+  } else {
+    const allPrices = currency === Currency.USD ? prices.usd : prices.brl;
+    totalAmount = allPrices.length > 0 ? Math.max(...allPrices) : 0;
+  }
 
   // Parcelas
   let installments = 1;
-  const installmentMatch = text.match(/(\d+)x/i);
+  const installmentMatch = text.match(/(\d+)\s*[xX]/i);
   if (installmentMatch) {
     installments = parseInt(installmentMatch[1]);
   }
@@ -94,15 +124,22 @@ const analyzeBlock = (text: string, vendorPhone: string): ParsedQuoteBlock => {
   if (missing.length > 0) confidence = 'média';
   if (totalAmount === 0) confidence = 'baixa';
 
-  // PATCH BAIXO: Força taxa 1 para BRL no parser
+  // Taxa de câmbio
   const rate = currency === Currency.BRL ? 1 : 5.2;
+
+  // Determinar métodos de pagamento
+  const methods: PaymentMethod[] = [];
+  if (prices.pixPrice || /pix/i.test(text)) methods.push(PaymentMethod.PIX);
+  if (prices.creditPrice || /cartão|crédito|credit/i.test(text)) methods.push(PaymentMethod.CREDIT_CARD);
+  if (prices.cashPrice || /dinheiro|cash/i.test(text)) methods.push(PaymentMethod.CASH);
+  if (methods.length === 0) methods.push(PaymentMethod.PIX); // Default
 
   return {
     id: Math.random().toString(36).substr(2, 9),
     rawText: text,
     vendorPhone,
-    vendorName: vendorPhone, // No parser inicial o nome é o telefone
-    title: firstLine.length > 50 ? firstLine.substring(0, 50) + '...' : firstLine,
+    vendorName: vendorPhone,
+    title: firstLine.length > 80 ? firstLine.substring(0, 80) + '...' : firstLine,
     category,
     currency,
     totalAmount,
@@ -110,8 +147,12 @@ const analyzeBlock = (text: string, vendorPhone: string): ParsedQuoteBlock => {
     installmentValue: totalAmount / installments,
     confidence,
     missingFields: missing,
+    cashPrice: prices.cashPrice,
+    creditPrice: prices.creditPrice,
+    pixPrice: prices.pixPrice,
+    cashDiscount,
     suggestedQuote: {
-      title: firstLine,
+      title: firstLine.length > 100 ? firstLine.substring(0, 100) + '...' : firstLine,
       category,
       currency,
       totalAmount,
@@ -121,9 +162,10 @@ const analyzeBlock = (text: string, vendorPhone: string): ParsedQuoteBlock => {
       status: QuoteStatus.ANALYSIS,
       notesInternal: `Importado do WhatsApp\n---\n${text}`,
       paymentTerms: {
-        methods: [installments > 1 ? PaymentMethod.CREDIT_CARD : PaymentMethod.PIX],
+        methods,
         installments,
-        installmentValue: (totalAmount * rate) / installments
+        installmentValue: (totalAmount * rate) / installments,
+        cashDiscount: cashDiscount > 0 ? cashDiscount * rate : undefined
       }
     }
   };

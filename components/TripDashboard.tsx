@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Trip, Quote, Expense } from '../types';
-import { Button, Card } from './CommonUI';
+import { Button, Card, Modal } from './CommonUI';
 import { ICONS } from '../constants';
-import { dataProvider } from '../lib/dataProvider';
+import { supabaseDataProvider } from '../lib/supabaseDataProvider';
+import { formatDateShort, formatDateVeryShort } from '../lib/formatters';
 import TripSetupChecklist from './TripSetupChecklist';
 import LinkTravelersModal from './LinkTravelersModal';
 import LinkVendorsModal from './LinkVendorsModal';
@@ -13,22 +14,24 @@ interface TripDashboardProps {
   expenses: Expense[];
   onNavigate: (tab: string) => void;
   onRefresh: () => void;
+  onEditTrip: () => void; // Nova prop
 }
 
-const TripDashboard: React.FC<TripDashboardProps> = ({ trip, quotes, expenses, onNavigate, onRefresh }) => {
+const TripDashboard: React.FC<TripDashboardProps> = ({ trip, quotes, expenses, onNavigate, onRefresh, onEditTrip }) => {
   const [travelers, setTravelers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showLinkTravelers, setShowLinkTravelers] = useState(false);
   const [showLinkVendors, setShowLinkVendors] = useState(false);
+  const [showChecklist, setShowChecklist] = useState(false);
 
   useEffect(() => {
     loadTravelers();
-  }, [trip.id]);
+  }, [trip.id, trip]); // Recarrega quando trip.id ou trip mudar
 
   const loadTravelers = async () => {
     setLoading(true);
     try {
-      const data = await dataProvider.getTravelers(trip.id);
+      const data = await supabaseDataProvider.getTripTravelers(trip.id);
       setTravelers(data);
     } catch (error) {
       console.error('Erro ao carregar viajantes:', error);
@@ -37,16 +40,12 @@ const TripDashboard: React.FC<TripDashboardProps> = ({ trip, quotes, expenses, o
     }
   };
 
-  const formatDate = (date: string) => {
-    if (!date) return '';
-    return new Date(date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
-  };
-
   const getDuration = (startDate: string, endDate: string) => {
     if (!startDate || !endDate) return '';
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    // Usar parseSupabaseDate para evitar problema de timezone
+    const start = new Date(startDate + 'T00:00:00');
+    const end = new Date(endDate + 'T00:00:00');
+    const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     return `${days} dias`;
   };
 
@@ -95,27 +94,48 @@ const TripDashboard: React.FC<TripDashboardProps> = ({ trip, quotes, expenses, o
 
   return (
     <div className="space-y-6">
-      {/* Checklist de Setup */}
-      <TripSetupChecklist
-        trip={trip}
-        onNavigate={onNavigate}
-        onOpenLinkTravelers={() => setShowLinkTravelers(true)}
-        onOpenLinkVendors={() => setShowLinkVendors(true)}
-        onRefresh={onRefresh}
-      />
-
-      {/* Header */}
+      {/* Header com botão de checklist */}
       <div className="bg-gradient-to-r from-indigo-600 to-cyan-500 rounded-xl p-6 text-white">
-        <h1 className="text-3xl font-black uppercase tracking-tight mb-2">{trip.name}</h1>
-        <div className="flex flex-wrap items-center gap-4 text-sm opacity-90">
-          <span>📅 {formatDate(trip.startDate)} - {formatDate(trip.endDate)}</span>
-          <span>•</span>
-          <span>⏱️ {getDuration(trip.startDate, trip.endDate)}</span>
-          {trip.segments && trip.segments.length > 0 && trip.segments[0].name !== 'Geral' && (
-            <>
-              <span>•</span>
-              <span>📍 {trip.segments.map(s => s.name).join(', ')}</span>
-            </>
+        <div className="flex items-start justify-between mb-2">
+          <h1 className="text-3xl font-black uppercase tracking-tight">{trip.name}</h1>
+          <div className="flex gap-2">
+            <Button 
+              onClick={onEditTrip}
+              className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white border-0"
+            >
+              ✏️ Editar
+            </Button>
+            <Button 
+              onClick={() => setShowChecklist(true)}
+              className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white border-0"
+            >
+              📋 Checklist
+            </Button>
+          </div>
+        </div>
+        
+        {/* Informações da viagem */}
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-4 text-sm opacity-90">
+            <span>📅 {formatDateShort(trip.startDate)} - {formatDateShort(trip.endDate)}</span>
+            <span>•</span>
+            <span>⏱️ {getDuration(trip.startDate, trip.endDate)}</span>
+          </div>
+          
+          {/* Mostrar segmentos se houver múltiplos destinos */}
+          {trip.segments && trip.segments.length > 0 && trip.segments[0].name !== 'Viagem Completa' && (
+            <div className="flex flex-wrap gap-2">
+              {trip.segments.map((segment, index) => (
+                <div key={segment.id} className="flex items-center gap-2 px-3 py-1 bg-white/10 rounded-full text-xs">
+                  <span className="font-bold">📍 {segment.name}</span>
+                  {segment.startDate && segment.endDate && (
+                    <span className="opacity-75">
+                      {formatDateVeryShort(segment.startDate)} - {formatDateVeryShort(segment.endDate)}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>
@@ -172,35 +192,36 @@ const TripDashboard: React.FC<TripDashboardProps> = ({ trip, quotes, expenses, o
         </Card>
       </div>
 
-      {/* Checklist de Setup */}
+      {/* Viajantes */}
       <Card>
-        <h2 className="text-xl font-black text-white uppercase tracking-tight mb-4">Setup da Viagem</h2>
-        <div className="space-y-3">
-          {checklistItems.map((item) => (
-            <div
-              key={item.id}
-              className={`flex items-center justify-between p-3 rounded-lg ${
-                item.completed ? 'bg-green-600/10 border border-green-600/30' : 'bg-gray-800 border border-gray-700'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                  item.completed ? 'bg-green-600' : 'bg-gray-700'
-                }`}>
-                  {item.completed ? '✓' : '○'}
-                </div>
-                <span className={`font-bold ${item.completed ? 'text-green-400' : 'text-white'}`}>
-                  {item.label}
-                </span>
-              </div>
-              {!item.completed && (
-                <Button onClick={item.action} className="bg-indigo-600 hover:bg-indigo-700 text-xs">
-                  Fazer agora
-                </Button>
-              )}
-            </div>
-          ))}
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-black text-white uppercase tracking-tight">Viajantes</h2>
+          <Button onClick={() => onNavigate('travelers')} className="bg-indigo-600 hover:bg-indigo-700 text-xs">
+            <ICONS.Plus className="w-4 h-4 mr-1" />
+            Gerenciar
+          </Button>
         </div>
+
+        {travelers.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <p>Nenhum viajante adicionado ainda</p>
+            <Button onClick={() => onNavigate('travelers')} className="mt-4 bg-indigo-600 hover:bg-indigo-700">
+              Adicionar Viajantes
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {travelers.map((traveler) => (
+              <div key={traveler.id} className="p-3 bg-gray-800 rounded-lg text-center">
+                <div className="text-2xl mb-1">
+                  {traveler.profile?.type === 'Adulto' ? '👤' : traveler.profile?.type === 'Criança' ? '👶' : '🐾'}
+                </div>
+                <div className="font-bold text-white text-sm">{traveler.profile?.full_name}</div>
+                <div className="text-xs text-gray-500 mt-1">{traveler.profile?.type}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
 
       {/* Orçamentos Recentes */}
@@ -295,24 +316,50 @@ const TripDashboard: React.FC<TripDashboardProps> = ({ trip, quotes, expenses, o
       {/* Modais */}
       {showLinkTravelers && (
         <LinkTravelersModal
-          tripId={trip.id}
+          trip={trip}
           onClose={() => setShowLinkTravelers(false)}
           onLinked={() => {
             setShowLinkTravelers(false);
-            onRefresh();
+            loadTravelers(); // Recarrega viajantes do dashboard
+            onRefresh(); // Recarrega dados gerais da viagem
           }}
         />
       )}
 
       {showLinkVendors && (
         <LinkVendorsModal
-          tripId={trip.id}
+          trip={trip}
           onClose={() => setShowLinkVendors(false)}
           onLinked={() => {
             setShowLinkVendors(false);
             onRefresh();
           }}
         />
+      )}
+
+      {/* Modal do Checklist */}
+      {showChecklist && (
+        <Modal isOpen={true} onClose={() => setShowChecklist(false)} title="Checklist de Configuração">
+          <div className="p-6">
+            <TripSetupChecklist
+              key={`checklist-${showChecklist}`} // Força reload quando modal abre
+              trip={trip}
+              onNavigate={(tab) => {
+                setShowChecklist(false);
+                onNavigate(tab);
+              }}
+              onOpenLinkTravelers={() => {
+                setShowChecklist(false);
+                setShowLinkTravelers(true);
+              }}
+              onOpenLinkVendors={() => {
+                setShowChecklist(false);
+                setShowLinkVendors(true);
+              }}
+              onRefresh={onRefresh}
+            />
+          </div>
+        </Modal>
       )}
     </div>
   );

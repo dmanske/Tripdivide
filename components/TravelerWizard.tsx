@@ -65,6 +65,7 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
   const [showDocNumber, setShowDocNumber] = useState(true); // Mostrar por padrão
   const [tagInput, setTagInput] = useState('');
   const [loadingDocs, setLoadingDocs] = useState(false);
+  const [saving, setSaving] = useState(false); // Prevenir double-click
   const [profileId, setProfileId] = useState<string | undefined>(existingProfileId);
   const [tripTravelerId, setTripTravelerId] = useState<string | undefined>();
   
@@ -167,8 +168,12 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
       ];
 
   const handleNext = async () => {
+    // Prevenir double-click
+    if (saving) return;
+    
     // Step 1 -> Step 2 (or 3 if no trip): Salvar perfil global
     if (step === 1) {
+      setSaving(true);
       try {
         const saved = await supabaseDataProvider.saveTravelerProfile({
           id: profileId,
@@ -196,11 +201,14 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
       } catch (error) {
         console.error('Erro ao salvar perfil:', error);
         return;
+      } finally {
+        setSaving(false);
       }
     }
     
     // Step 2 -> Step 3: Salvar vínculo se tripId existe E shouldLinkToTrip é true
     if (step === 2 && tripId && profileId && shouldLinkToTrip) {
+      setSaving(true);
       try {
         if (tripTravelerId) {
           await supabaseDataProvider.updateTripTraveler(tripTravelerId, {
@@ -229,6 +237,8 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
       } catch (error) {
         console.error('Erro ao vincular:', error);
         return;
+      } finally {
+        setSaving(false);
       }
     }
     
@@ -1065,7 +1075,9 @@ const TravelerWizard: React.FC<TravelerWizardProps> = ({ tripId, trip, existingP
         </Button>
         <div className="flex gap-2">
            {step < 3 ? (
-             <Button onClick={handleNext} disabled={step === 1 && !isStep1Valid()}>Próximo</Button>
+             <Button onClick={handleNext} disabled={saving || (step === 1 && !isStep1Valid())}>
+               {saving ? 'Salvando...' : 'Próximo'}
+             </Button>
            ) : (
              <Button 
                variant="primary" 

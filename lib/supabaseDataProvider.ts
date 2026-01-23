@@ -2014,43 +2014,43 @@ export const supabaseDataProvider = {
   // ==================== TRIP SETUP STATS ====================
   getTripSetupStats: async (tripId: string) => {
     // Contar viajantes vinculados
-    const { data: travelers, error: travelersError } = await supabase
+    const { count: travelersCount } = await supabase
       .from('td_trip_travelers')
-      .select('id', { count: 'exact', head: true })
+      .select('*', { count: 'exact', head: true })
       .eq('trip_id', tripId)
       .eq('status', 'Ativo');
 
     // Contar fornecedores vinculados
-    const { data: vendors, error: vendorsError } = await supabase
+    const { count: vendorsCount } = await supabase
       .from('td_trip_vendors')
-      .select('id', { count: 'exact', head: true })
+      .select('*', { count: 'exact', head: true })
       .eq('trip_id', tripId)
       .eq('status', 'Ativo');
 
     // Contar cotações
-    const { data: quotes, error: quotesError } = await supabase
+    const { count: quotesCount } = await supabase
       .from('td_quotes')
-      .select('id', { count: 'exact', head: true })
+      .select('*', { count: 'exact', head: true })
       .eq('trip_id', tripId);
 
     // Contar despesas
-    const { data: expenses, error: expensesError } = await supabase
+    const { count: expensesCount } = await supabase
       .from('td_expenses')
-      .select('id', { count: 'exact', head: true })
+      .select('*', { count: 'exact', head: true })
       .eq('trip_id', tripId);
 
     // Contar pagamentos
-    const { data: payments, error: paymentsError } = await supabase
+    const { count: paymentsCount } = await supabase
       .from('td_payments')
-      .select('id', { count: 'exact', head: true })
+      .select('*', { count: 'exact', head: true })
       .eq('trip_id', tripId);
 
     return {
-      travelersCount: travelers?.length || 0,
-      vendorsCount: vendors?.length || 0,
-      quotesCount: quotes?.length || 0,
-      expensesCount: expenses?.length || 0,
-      paymentsCount: payments?.length || 0
+      travelersCount: travelersCount || 0,
+      vendorsCount: vendorsCount || 0,
+      quotesCount: quotesCount || 0,
+      expensesCount: expensesCount || 0,
+      paymentsCount: paymentsCount || 0
     };
   }
 };

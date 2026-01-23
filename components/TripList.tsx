@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabaseDataProvider } from '../lib/supabaseDataProvider';
 import { Button, Modal } from './CommonUI';
 import { ICONS } from '../constants';
+import { formatDateShort } from '../lib/formatters';
 import TripWizard from './TripWizard';
 
 interface TripListProps {
@@ -101,16 +102,11 @@ const TripList: React.FC<TripListProps> = ({ onNavigateToTrip, onRefresh }) => {
     }
   };
 
-  const formatDate = (date: string) => {
-    if (!date) return '';
-    return new Date(date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
-  };
-
   const getDuration = (startDate: string, endDate: string) => {
     if (!startDate || !endDate) return '';
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    const start = new Date(startDate + 'T00:00:00');
+    const end = new Date(endDate + 'T00:00:00');
+    const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     return `${days} dias`;
   };
 
@@ -161,7 +157,7 @@ const TripList: React.FC<TripListProps> = ({ onNavigateToTrip, onRefresh }) => {
                       <h3 className="text-lg font-bold text-white">{trip.name || 'Viagem sem nome'}</h3>
                       <span className="px-2 py-0.5 bg-yellow-600/20 text-yellow-400 text-xs font-bold rounded">RASCUNHO</span>
                     </div>
-                    <p className="text-sm text-gray-500 mt-1">Criado em {formatDate(trip.created_at)}</p>
+                    <p className="text-sm text-gray-500 mt-1">Criado em {formatDateShort(trip.created_at)}</p>
                   </div>
                   <div className="flex gap-2">
                     <Button onClick={() => onNavigateToTrip(trip.id)} className="bg-yellow-600 hover:bg-yellow-700 text-xs">
@@ -202,7 +198,7 @@ const TripList: React.FC<TripListProps> = ({ onNavigateToTrip, onRefresh }) => {
                       )}
                     </div>
                     <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
-                      <span>{formatDate(trip.start_date)} - {formatDate(trip.end_date)}</span>
+                      <span>{formatDateShort(trip.start_date)} - {formatDateShort(trip.end_date)}</span>
                       <span>•</span>
                       <span>{getDuration(trip.start_date, trip.end_date)}</span>
                       {trip.destinations && trip.destinations.length > 0 && (
